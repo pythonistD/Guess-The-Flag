@@ -9,6 +9,7 @@ type User struct {
 	Uuid      uuid.UUID `db:"user_id"`
 	Name      string    `db:"username"`
 	Email     string    `db:"email"`
+	Password  string    `db:"password_hash"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
