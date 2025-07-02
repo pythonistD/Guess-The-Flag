@@ -17,8 +17,8 @@ func NewAnswersRepo(db *sqlx.DB) *AnswersRepo {
 	return &AnswersRepo{db: db}
 }
 
-func (a *AnswersRepo) Create(ctx context.Context, country *models.Country) error {
-	_, err := a.db.ExecContext(ctx, queries.AnswerQueries.Create, country)
+func (a *AnswersRepo) Create(ctx context.Context, answer *models.Answer) error {
+	_, err := a.db.NamedExecContext(ctx, queries.AnswerQueries.Create, answer)
 	if err != nil {
 		return fmt.Errorf("error creating answer: %w", err)
 	}
@@ -32,4 +32,13 @@ func (a *AnswersRepo) GetQuestionAnswer(ctx context.Context, id uuid.UUID) (*mod
 		return nil, fmt.Errorf("error getting answer: %w", err)
 	}
 	return &answer, nil
+}
+
+func (a *AnswersRepo) GetQuestionsByGameId(ctx context.Context, gameId uuid.UUID) ([]models.Answer, error) {
+	var answers []models.Answer
+	err := a.db.GetContext(ctx, &answers, queries.AnswerQueries.GetQuestionsByGameId, gameId)
+	if err != nil {
+		return nil, fmt.Errorf("error getting answers: %w", err)
+	}
+	return answers, nil
 }

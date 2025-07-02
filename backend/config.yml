@@ -1,7 +1,10 @@
-api_address: :8080
+addr: localhost:8080
+secret: secret_key
+token_lifetime: 100000s
+logging_level: info
 database:
   host: localhost
-  port: '5432'
+  port: 5432
   username: postgres
   password: postgres
   dbname: guess_the_flag

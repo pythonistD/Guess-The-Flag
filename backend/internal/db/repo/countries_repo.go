@@ -32,3 +32,13 @@ func (c *CountriesRepo) GetById(ctx context.Context, id int) (*models.Country, e
 	}
 	return &country, nil
 }
+
+func (c *CountriesRepo) CreateAll(ctx context.Context, countries []models.Country) error {
+	for _, country := range countries {
+		_, err := c.db.NamedExecContext(ctx, queries.CountryQueries.Create, country)
+		if err != nil {
+			return fmt.Errorf("error creating country: %w", err)
+		}
+	}
+	return nil
+}

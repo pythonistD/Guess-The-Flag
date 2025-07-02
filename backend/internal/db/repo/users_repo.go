@@ -42,3 +42,12 @@ func (u *UsersRepo) GetByEmail(ctx context.Context, email string) (*models.User,
 	}
 	return &user, nil
 }
+
+func (u *UsersRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+	var user models.User
+	err := u.db.GetContext(ctx, &user, queries.UserQueries.GetByUsername, username)
+	if err != nil {
+		return nil, fmt.Errorf("error getting user by username: %w", err)
+	}
+	return &user, nil
+}

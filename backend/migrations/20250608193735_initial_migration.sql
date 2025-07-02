@@ -10,7 +10,7 @@ CREATE TABLE users (
 CREATE TABLE countries (
     country_id SERIAL PRIMARY KEY,
     name VARCHAR NOT NULL UNIQUE,
-    code VARCHAR(2) NOT NULL UNIQUE,
+    code VARCHAR NOT NULL UNIQUE,
     flag_url VARCHAR NOT NULL
 );
 

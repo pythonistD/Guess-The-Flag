@@ -42,11 +42,19 @@ type Question struct {
 }
 
 type Answer struct {
-	AnswerId        uuid.UUID `db:"answer_id"`
-	QuestionId      uuid.UUID `db:"question_id"`
-	SelectedCountry int       `db:"selected_country_id"`
-	AnsweredAt      time.Time `db:"answered_at"`
-	IsCorrect       bool      `db:"is_correct"`
+	AnswerId   uuid.UUID `db:"answer_id"`
+	QuestionId uuid.UUID `db:"question_id"`
+	AnswerText string    `db:"answer"`
+	AnsweredAt time.Time `db:"answered_at"`
+	IsCorrect  bool      `db:"is_correct"`
+}
+
+type QuestionWithAnswers struct {
+	AnswerText  string `db:"answer" json:"answer"`
+	IsCorrect   bool   `db:"is_correct" json:"is_correct"`
+	CountryName string `db:"name" json:"name"`
+	CountryCode string `db:"code" json:"code"`
+	FlagUrl     string `db:"flag_url" json:"flag_url"`
 }
 
 type Country struct {

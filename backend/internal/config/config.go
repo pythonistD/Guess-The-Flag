@@ -1,16 +1,19 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"os"
 	"time"
 )
 
 type AppConfig struct {
-	Addr     string   `yaml:"addr"`
-	DBConfig DBConfig `yaml:"dbConfig"`
+	Addr          string        `yaml:"addr"`
+	Secret        string        `yaml:"secret"`
+	TokenLifetime time.Duration `yaml:"token_lifetime"`
+	DBConfig      DBConfig      `yaml:"database"`
+	Level         string        `yaml:"logging_level"`
 }
 
 type DBConfig struct {
@@ -37,7 +40,7 @@ func LoadConfigFromFile(path string) (AppConfig, error) {
 
 func loadFromBytes(data []byte) (AppConfig, error) {
 	var appConfig AppConfig
-	if err := json.Unmarshal(data, &appConfig); err != nil {
+	if err := yaml.Unmarshal(data, &appConfig); err != nil {
 		return AppConfig{}, fmt.Errorf("error unmarshalling config: %w", err)
 	}
 	return appConfig, nil
