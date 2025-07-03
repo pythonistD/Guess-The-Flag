@@ -1,0 +1,458 @@
+openapi: 3.0.3
+info:
+  title: Guess The Flag API
+  description: |
+    API для игры "Угадай флаг". Включает в себя аутентификацию пользователей и игровую механику.
+    
+    ## Аутентификация
+    API использует JWT токены для аутентификации. После регистрации или входа вы получите токен,
+    который необходимо передавать в заголовке Authorization: Bearer <token> для защищенных эндпоинтов.
+    
+    ## Игровой процесс
+    1. Начните игру через POST /game/start
+    2. Получайте вопросы через POST /game/question
+    3. Отвечайте на вопросы через POST /game/answer
+    4. Завершите игру через POST /game/end
+  version: 0.1.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Регистрация нового пользователя
+      description: Создает новый аккаунт пользователя и возвращает JWT токен
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              username: "john_doe"
+              email: "john@example.com"
+              password: "securePassword123"
+      responses:
+        '200':
+          description: Успешная регистрация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Неверный формат запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "failed to unmarshal request body: invalid JSON"
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "failed to register user: user already exists"
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Вход в систему
+      description: Аутентификация пользователя и получение JWT токена
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: "john_doe"
+              password: "securePassword123"
+      responses:
+        '200':
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Неверный формат запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Неверные учетные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "failed to login user: invalid password"
+
+  /game/start:
+    post:
+      tags:
+        - Game
+      summary: Начать новую игру
+      description: Создает новую игровую сессию и возвращает ее ID
+      operationId: startGame
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Игра успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartGameResponse'
+              example:
+                game_id: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+        '401':
+          description: Пользователь не аутентифицирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Ошибка при создании игры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /game/question:
+    post:
+      tags:
+        - Game
+      summary: Получить вопрос игры
+      description: Возвращает вопрос (флаг страны) для указанного номера вопроса в игре
+      operationId: getQuestion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+            example:
+              gameId: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+              questionNum: 1
+      responses:
+        '200':
+          description: Вопрос успешно получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResponse'
+              example:
+                question_text: "Какой стране принадлежит этот флаг?"
+                flag_url: "https://example.com/flags/us.png"
+        '400':
+          description: Неверный формат запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Пользователь не аутентифицирован
+        '500':
+          description: Ошибка при получении вопроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /game/answer:
+    post:
+      tags:
+        - Game
+      summary: Ответить на вопрос
+      description: Отправляет ответ на вопрос и возвращает результат (правильно/неправильно)
+      operationId: answerQuestion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerRequest'
+            example:
+              gameId: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+              questionNum: 1
+              answer: "США"
+      responses:
+        '200':
+          description: Ответ принят
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerResponse'
+              example:
+                is_correct: true
+        '400':
+          description: Неверный формат запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Пользователь не аутентифицирован
+        '500':
+          description: Ошибка при обработке ответа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /game/end:
+    post:
+      tags:
+        - Game
+      summary: Завершить игру
+      description: Завершает игровую сессию и возвращает результаты игры
+      operationId: endGame
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndGameRequest'
+            example:
+              gameId: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+      responses:
+        '200':
+          description: Игра успешно завершена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndGameResponse'
+              example:
+                - answer: "США"
+                  is_correct: true
+                  name: "Соединенные Штаты Америки"
+                  code: "US"
+                  flag_url: "https://example.com/flags/us.png"
+                - answer: "Франция"
+                  is_correct: false
+                  name: "Германия"
+                  code: "DE"
+                  flag_url: "https://example.com/flags/de.png"
+        '400':
+          description: Неверный формат запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Пользователь не аутентифицирован
+        '500':
+          description: Ошибка при завершении игры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT токен, полученный при регистрации или входе
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          description: Имя пользователя (уникальное)
+          example: "john_doe"
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          description: Email адрес пользователя
+          example: "john@example.com"
+        password:
+          type: string
+          description: Пароль пользователя
+          example: "securePassword123"
+          minLength: 6
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Имя пользователя
+          example: "john_doe"
+        password:
+          type: string
+          description: Пароль пользователя
+          example: "securePassword123"
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT токен для аутентификации
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzNDU2NzgtOTBhYi1jZGVmLTEyMzQtNTY3ODkwYWJjZGVmIiwiZXhwIjoxNjk5OTk5OTk5fQ.signature"
+
+    StartGameResponse:
+      type: object
+      properties:
+        game_id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор игры
+          example: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+
+    QuestionRequest:
+      type: object
+      required:
+        - gameId
+        - questionNum
+      properties:
+        gameId:
+          type: string
+          format: uuid
+          description: ID игры
+          example: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+        questionNum:
+          type: integer
+          description: Номер вопроса (начиная с 1)
+          example: 1
+          minimum: 1
+
+    QuestionResponse:
+      type: object
+      properties:
+        question_text:
+          type: string
+          description: Текст вопроса
+          example: "Какой стране принадлежит этот флаг?"
+        flag_url:
+          type: string
+          format: uri
+          description: URL изображения флага
+          example: "https://example.com/flags/us.png"
+
+    AnswerRequest:
+      type: object
+      required:
+        - gameId
+        - questionNum
+        - answer
+      properties:
+        gameId:
+          type: string
+          format: uuid
+          description: ID игры
+          example: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+        questionNum:
+          type: integer
+          description: Номер вопроса
+          example: 1
+          minimum: 1
+        answer:
+          type: string
+          description: Ответ игрока (название страны)
+          example: "США"
+
+    AnswerResponse:
+      type: object
+      properties:
+        is_correct:
+          type: boolean
+          description: Правильный ли ответ
+          example: true
+
+    EndGameRequest:
+      type: object
+      required:
+        - gameId
+      properties:
+        gameId:
+          type: string
+          format: uuid
+          description: ID игры для завершения
+          example: "e6fdfe58-4aba-4454-8283-6f5a4a18f980"
+
+    EndGameResponse:
+      type: array
+      description: Список всех вопросов и ответов игры с результатами
+      items:
+        $ref: '#/components/schemas/QuestionWithAnswer'
+
+    QuestionWithAnswer:
+      type: object
+      properties:
+        answer:
+          type: string
+          description: Ответ игрока
+          example: "США"
+        is_correct:
+          type: boolean
+          description: Правильный ли ответ
+          example: true
+        name:
+          type: string
+          description: Правильное название страны
+          example: "Соединенные Штаты Америки"
+        code:
+          type: string
+          description: Код страны
+          example: "US"
+        flag_url:
+          type: string
+          format: uri
+          description: URL флага страны
+          example: "https://example.com/flags/us.png"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+          example: "Authentication required"
+
+tags:
+  - name: Authentication
+    description: Операции для регистрации и аутентификации пользователей
+  - name: Game
+    description: Операции для управления игровым процессом 

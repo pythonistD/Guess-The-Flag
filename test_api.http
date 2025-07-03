@@ -1,0 +1,27 @@
+### Test Registration
+POST http://localhost:8080/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "testpass123"
+}
+
+### Test Login
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "testpass123"
+}
+
+### Test Game Start (requires token from login)
+POST http://localhost:8080/game/start
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Test CORS preflight
+OPTIONS http://localhost:8080/auth/register
+Origin: http://localhost:3000 

@@ -1,0 +1,12 @@
+addr: localhost:8080
+secret: secret_key
+token_lifetime: 24h
+database:
+  host: localhost
+  port: 5432
+  username: postgres
+  password: postgres
+  dbname: guess_the_flag
+  max_idle_connections: 2
+  max_open_connections: 100
+  max_connection_lifetime: 60m 
