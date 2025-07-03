@@ -3,12 +3,13 @@ package user
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/pythonistD/Guess-The-Flag/internal/db/models"
 	"github.com/pythonistD/Guess-The-Flag/internal/db/repo"
 	"github.com/pythonistD/Guess-The-Flag/internal/schema"
-	"time"
 )
 
 type Service interface {
@@ -59,7 +60,7 @@ func (s *ServiceImpl) Register(ctx context.Context, register schema.Register) (s
 	}
 	user := models.User{
 		Uuid:      userId,
-		Name:      register.Name,
+		Name:      register.Username,
 		Email:     register.Email,
 		Password:  passHash,
 		CreatedAt: time.Time{},

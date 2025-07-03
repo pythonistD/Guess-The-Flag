@@ -3,10 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	"github.com/pythonistD/Guess-The-Flag/internal/schema"
 	"github.com/pythonistD/Guess-The-Flag/internal/service/game"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type GameHandler struct {
@@ -22,6 +23,11 @@ func NewGameHandler(gameService *game.Service, logger *zap.Logger) *GameHandler 
 }
 
 func (handler *GameHandler) Start(w http.ResponseWriter, r *http.Request) {
+	// Обрабатываем OPTIONS запросы для CORS
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	gameId, err := handler.gameService.StartGame(r.Context())
 	if err != nil {
 		handler.logger.Error("Failed to start game", zap.Error(err))
@@ -41,6 +47,11 @@ func (handler *GameHandler) Start(w http.ResponseWriter, r *http.Request) {
 }
 
 func (handler *GameHandler) GetQuestion(w http.ResponseWriter, r *http.Request) {
+	// Обрабатываем OPTIONS запросы для CORS
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	var req schema.QuestionReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -61,6 +72,11 @@ func (handler *GameHandler) GetQuestion(w http.ResponseWriter, r *http.Request) 
 }
 
 func (handler *GameHandler) AnswerTheQuestion(w http.ResponseWriter, r *http.Request) {
+	// Обрабатываем OPTIONS запросы для CORS
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	var req schema.AnswerReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -77,6 +93,11 @@ func (handler *GameHandler) AnswerTheQuestion(w http.ResponseWriter, r *http.Req
 }
 
 func (handler *GameHandler) End(w http.ResponseWriter, r *http.Request) {
+	// Обрабатываем OPTIONS запросы для CORS
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	var req schema.EndGameReq
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
