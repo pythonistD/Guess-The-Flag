@@ -1,8 +1,9 @@
 package models
 
 import (
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type User struct {
@@ -14,10 +15,11 @@ type User struct {
 }
 
 type Game struct {
-	GameId    uuid.UUID `db:"game_id"`
-	UserId    uuid.UUID `db:"user_id"`
-	StartedAt time.Time `db:"started_at"`
-	EndedAt   time.Time `db:"ended_at"`
+	GameId       uuid.UUID `db:"game_id"`
+	UserId       uuid.UUID `db:"user_id"`
+	LanguageCode string    `db:"language_code"`
+	StartedAt    time.Time `db:"started_at"`
+	EndedAt      time.Time `db:"ended_at"`
 }
 
 type Leaderboard struct {
@@ -54,12 +56,38 @@ type QuestionWithAnswers struct {
 	IsCorrect   bool   `db:"is_correct" json:"is_correct"`
 	CountryName string `db:"name" json:"name"`
 	CountryCode string `db:"code" json:"code"`
-	FlagUrl     string `db:"flag_url" json:"flag_url"`
+	FlagSVG     string `db:"flag_svg" json:"flag_svg"`
 }
 
 type Country struct {
-	CountryId int    `db:"country_id"`
-	Name      string `db:"name"`
-	Code      string `db:"code"`
-	FlagUrl   string `db:"flag_url"`
+	CountryId   int    `db:"country_id"`
+	Code        string `db:"code"`
+	FlagImageId int    `db:"flag_image_id"`
+}
+
+type FlagImage struct {
+	ImageId   int       `db:"image_id"`
+	SvgData   string    `db:"svg_data"`
+	ImageHash string    `db:"image_hash"`
+	FileSize  int       `db:"file_size"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
+}
+
+type CountryNames struct {
+	CountryNamesId int    `db:"country_names_id"`
+	LanguageCode   string `db:"language_code"`
+	CountryId      int    `db:"country_id"`
+	Name           string `db:"name"`
+	NormalizedName string `db:"normalized_name"`
+	Threshold      int    `db:"threshold"`
+	IsDisplayName  bool   `db:"is_display_name"`
+}
+
+type CountryWithImage struct {
+	CountryId   int    `db:"country_id"`
+	Code        string `db:"code"`
+	FlagImageId int    `db:"flag_image_id"`
+	SvgData     string `db:"svg_data"`
+	ImageHash   string `db:"image_hash"`
 }

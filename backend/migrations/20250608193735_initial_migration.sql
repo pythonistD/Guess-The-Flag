@@ -5,14 +5,23 @@ CREATE TABLE users (
     email VARCHAR NOT NULL UNIQUE,
     password_hash VARCHAR NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+;
+CREATE TABLE images (
+    image_id SERIAL PRIMARY KEY,
+    svg_data TEXT NOT NULL,
+    image_hash VARCHAR(64) UNIQUE NOT NULL, -- SHA-256 хэш для дедупликации
+    file_size INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE countries (
     country_id SERIAL PRIMARY KEY,
-    name VARCHAR NOT NULL UNIQUE,
     code VARCHAR NOT NULL UNIQUE,
-    flag_url VARCHAR NOT NULL
+    flag_image_id INTEGER REFERENCES images(image_id) NOT NULL
 );
+
 
 CREATE TABLE games (
     game_id UUID PRIMARY KEY,
@@ -50,6 +59,16 @@ CREATE TABLE unknown_flags (
     country_id INT REFERENCES countries(country_id)
 );
 
+CREATE TABLE country_names (
+    country_names_id SERIAL PRIMARY KEY,
+    language_code VARCHAR(3) NOT NULL,
+    country_id INTEGER NOT NULL REFERENCES countries(country_id),
+    name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    threshold INTEGER NOT NULL,
+    is_display_name BOOLEAN NOT NULL
+);
+
 -- +goose Down
 DROP TABLE IF EXISTS unknown_flags;
 DROP TABLE IF EXISTS leaderboard;
@@ -58,4 +77,6 @@ DROP TABLE IF EXISTS questions;
 DROP TABLE IF EXISTS games;
 DROP TABLE IF EXISTS countries;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS images;
+DROP TABLE IF EXISTS country_names;
 

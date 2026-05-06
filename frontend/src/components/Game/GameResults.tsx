@@ -1,7 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { QuestionWithAnswer } from '../../types/api';
+
+const FLAG_MAX_WIDTH = 120;
+const FLAG_MAX_HEIGHT = 80;
+
+function uniquifySvgIds(svg: string, prefix: string): string {
+  const ids = new Set<string>();
+  const idRegex = /\sid=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = idRegex.exec(svg)) !== null) {
+    ids.add(m[1]);
+  }
+  if (ids.size === 0) return svg;
+
+  let result = svg;
+  ids.forEach((id) => {
+    const newId = `${prefix}${id}`;
+    const escId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(`(\\sid=["'])${escId}(["'])`, 'g'), `$1${newId}$2`);
+    result = result.replace(new RegExp(`(href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
+    result = result.replace(new RegExp(`(xlink:href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
+    result = result.replace(new RegExp(`url\\(#${escId}\\)`, 'g'), `url(#${newId})`);
+  });
+  return result;
+}
+
+function normalizeFlagSvg(raw: string, idPrefix: string): string {
+  if (!raw) return '';
+  const withUniqueIds = uniquifySvgIds(raw, idPrefix);
+  return withUniqueIds.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
+    const widthMatch = attrs.match(/\swidth=["']([^"']+)["']/i);
+    const heightMatch = attrs.match(/\sheight=["']([^"']+)["']/i);
+    const viewBoxMatch = attrs.match(/\sviewBox=["']([^"']+)["']/i);
+
+    let newAttrs = attrs
+      .replace(/\swidth=["'][^"']*["']/gi, '')
+      .replace(/\sheight=["'][^"']*["']/gi, '')
+      .replace(/\spreserveAspectRatio=["'][^"']*["']/gi, '');
+
+    let vbW = 0;
+    let vbH = 0;
+    if (viewBoxMatch) {
+      const parts = viewBoxMatch[1].trim().split(/[\s,]+/).map(parseFloat);
+      if (parts.length === 4 && parts.every(Number.isFinite)) {
+        vbW = parts[2];
+        vbH = parts[3];
+      }
+    } else if (widthMatch && heightMatch) {
+      const w = parseFloat(widthMatch[1]);
+      const h = parseFloat(heightMatch[1]);
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        newAttrs += ` viewBox="0 0 ${w} ${h}"`;
+        vbW = w;
+        vbH = h;
+      }
+    }
+
+    newAttrs += ' preserveAspectRatio="xMidYMid meet"';
+
+    if (vbW > 0 && vbH > 0) {
+      const ratio = vbW / vbH;
+      const targetWidth = Math.min(FLAG_MAX_WIDTH, FLAG_MAX_HEIGHT * ratio);
+      const targetHeight = targetWidth / ratio;
+      return `<svg${newAttrs} width="${targetWidth}" height="${targetHeight}">`;
+    }
+    return `<svg${newAttrs} width="${FLAG_MAX_WIDTH}" height="${FLAG_MAX_HEIGHT}">`;
+  });
+}
 
 const Container = styled.div`
   min-height: 100vh;
@@ -91,13 +158,22 @@ const ResultItem = styled.div<{ isCorrect: boolean }>`
   }
 `;
 
-const FlagImage = styled.img`
-  width: 60px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: 5px;
+const FlagImage = styled.div`
+  width: ${FLAG_MAX_WIDTH}px;
   margin-right: 1rem;
-  border: 1px solid #e9ecef;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+
+  svg {
+    display: block;
+    max-width: ${FLAG_MAX_WIDTH}px;
+    max-height: ${FLAG_MAX_HEIGHT}px;
+    width: auto;
+    height: auto;
+  }
 `;
 
 const ResultInfo = styled.div`
@@ -166,6 +242,14 @@ const EmptyState = styled.div`
   padding: 3rem 2rem;
   color: #666;
 `;
+
+const ResultFlag: React.FC<{ flagSvg: string; idKey: string | number }> = ({ flagSvg, idKey }) => {
+  const normalized = useMemo(
+    () => normalizeFlagSvg(flagSvg, `r${idKey}-`),
+    [flagSvg, idKey]
+  );
+  return <FlagImage dangerouslySetInnerHTML={{ __html: normalized }} />;
+};
 
 const GameResults: React.FC = () => {
   const [results, setResults] = useState<QuestionWithAnswer[]>([]);
@@ -247,13 +331,7 @@ const GameResults: React.FC = () => {
         <ResultsList>
           {results.map((result, index) => (
             <ResultItem key={index} isCorrect={result.is_correct}>
-              <FlagImage 
-                src={result.flag_url} 
-                alt={`Флаг ${result.name}`}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjZjhmOWZhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM2NzY3NzciIGZvbnQtc2l6ZT0iOHB4Ij7QpNC70LDQszwvdGV4dD48L3N2Zz4=';
-                }}
-              />
+              <ResultFlag flagSvg={result.flag_svg} idKey={index} />
               <ResultInfo>
                 <CountryName>{result.name}</CountryName>
                 <UserAnswer isCorrect={result.is_correct}>

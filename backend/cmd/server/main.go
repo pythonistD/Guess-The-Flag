@@ -53,7 +53,7 @@ func main() {
 	countryStorage := storage.NewInMemoryCountryStorage(database)
 	gameStorage := storage.NewInMemoryGameStorage()
 	// Load countries into the storage
-	err = countryStorage.LoadCountriesFromDB()
+	err = countryStorage.InitCountryStorageState()
 	if err != nil {
 		logger.Error("Failed to load countries from database", zap.Error(err))
 	} else {
@@ -83,9 +83,13 @@ func main() {
 
 	gameSubRouter := r.PathPrefix("/game").Subrouter()
 	gameSubRouter.HandleFunc("/start", gameHandler.Start).Methods("POST", "OPTIONS")
-	gameSubRouter.HandleFunc("/question", gameHandler.GetQuestion).Methods("POST", "OPTIONS")
-	gameSubRouter.HandleFunc("/answer", gameHandler.AnswerTheQuestion).Methods("POST", "OPTIONS")
-	gameSubRouter.HandleFunc("/end", gameHandler.End).Methods("POST", "OPTIONS")
+	gameSubRouter.HandleFunc("/{gameId}/questions/next", gameHandler.GetQuestion).Methods("POST", "OPTIONS")
+	gameSubRouter.HandleFunc("/{gameId}/questions/{questionId}/answer", gameHandler.AnswerTheQuestion).Methods("POST", "OPTIONS")
+	gameSubRouter.HandleFunc("/{gameId}/end", gameHandler.End).Methods("POST", "OPTIONS")
+
+	// Публичный отладочный роут, отдающий все SVG флагов вместе с country_id.
+	// Защита JWT отключена для него в middleware/auth.go.
+	r.HandleFunc("/debug/flags", gameHandler.GetAllFlags).Methods("GET", "OPTIONS")
 
 	logger.Info("Starting server",
 		zap.String("address", cfg.Addr),

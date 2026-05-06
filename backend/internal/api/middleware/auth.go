@@ -21,6 +21,7 @@ func JWTMiddleware(tokenManager user.TokenManager) func(http.Handler) http.Handl
 			publicPaths := []string{
 				"/auth/login",
 				"/auth/register",
+				"/debug/flags",
 			}
 
 			// Проверяем, является ли текущий путь публичным

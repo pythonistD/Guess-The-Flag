@@ -19,17 +19,17 @@ export interface StartGameResponse {
 
 export interface QuestionRequest {
   gameId: string;
-  questionNum: number;
 }
 
 export interface QuestionResponse {
   question_text: string;
-  flag_url: string;
+  flag_svg: string;
+  question_id: string;
 }
 
 export interface AnswerRequest {
   gameId: string;
-  questionNum: number;
+  questionId: string;
   answer: string;
 }
 
@@ -46,11 +46,16 @@ export interface QuestionWithAnswer {
   is_correct: boolean;
   name: string;
   code: string;
-  flag_url: string;
+  flag_svg: string;
 }
 
 export type EndGameResponse = QuestionWithAnswer[];
 
 export interface ErrorResponse {
   error: string;
-} 
+}
+
+export interface FlagDebugItem {
+  country_id: number;
+  flag_svg: string;
+}

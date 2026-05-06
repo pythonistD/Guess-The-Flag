@@ -1,4 +1,24 @@
-# 3. Запуск основного приложения (локально)
+MIGRATION_DIR=migrations
+# Драйвер базы данных
+DB_DRIVER=postgres
+# Строка подключения (должна быть задана в .env как DATABASE_URL=...)
+DB_URL ?= "postgres://postgres:postgres@localhost:5432/guess_the_flag?sslmode=disable"
+
+.PHONY: migrate-up migrate-down migrate-status migrate-create
+
+migrate-up:
+	@echo "Running goose up..."
+	goose -dir $(MIGRATION_DIR) $(DB_DRIVER) $(DB_URL) up
+
+migrate-down:
+	@echo "Running goose down..."
+	goose -dir $(MIGRATION_DIR) $(DB_DRIVER) $(DB_URL) down
+
+migrate-status:
+	@echo "Migration status:"
+	goose -dir $(MIGRATION_DIR) $(DB_DRIVER) $(DB_URL) status
+
+
 run: ## Запустить основное приложение локально
 	@echo "$(GREEN)Запуск основного приложения...$(NC)"
 	cd cmd && go run server/main.go

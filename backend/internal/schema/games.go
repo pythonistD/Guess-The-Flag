@@ -3,18 +3,16 @@ package schema
 import "github.com/google/uuid"
 
 type QuestionReq struct {
-	GameId      uuid.UUID `json:"gameId"`
-	QuestionNum int       `json:"questionNum"`
+	GameId uuid.UUID `json:"gameId"`
 }
 type QuestionResp struct {
-	QuestionText string `json:"question_text"`
-	FlagUrl      string `json:"flag_url"`
+	QuestionText string    `json:"question_text"`
+	FlagSVG      string    `json:"flag_svg"`
+	QuestionID   uuid.UUID `json:"question_id"`
 }
 
 type AnswerReq struct {
-	GameId      uuid.UUID `json:"gameId"`
-	QuestionNum int       `json:"questionNum"`
-	Answer      string    `json:"answer"`
+	Answer string `json:"answer"`
 }
 
 type AnswerResp struct {

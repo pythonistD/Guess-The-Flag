@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: guess_the_flag_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: guess_the_flag
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_guess_the_flag:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d guess_the_flag"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app_network
+
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:3.24.1
+    container_name: guess_the_flag_migrate
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: host=postgres port=5432 user=postgres password=postgres dbname=guess_the_flag sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
+
+  filldb:
+    image: guess_the_flag_backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guess_the_flag_filldb
+    entrypoint: ["/app/filldb"]
+    command: ["--config=/app/config.yml"]
+    volumes:
+      - ./config.docker.yml:/app/config.yml:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - app_network
+    restart: "no"
+
+  backend:
+    image: guess_the_flag_backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guess_the_flag_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.docker.yml:/app/config.yml:ro
+    depends_on:
+      filldb:
+        condition: service_completed_successfully
+    networks:
+      - app_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: http://localhost:8080
+    container_name: guess_the_flag_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+volumes:
+  postgres_data_guess_the_flag:
+
+networks:
+  app_network:
+    driver: bridge

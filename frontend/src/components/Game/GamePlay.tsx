@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import styled from 'styled-components';
 import { ApiService } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -52,22 +52,33 @@ const GameCard = styled.div`
 const FlagContainer = styled.div`
   padding: 2rem;
   text-align: center;
-  background: #f8f9fa;
+  background:rgb(234, 234, 234);
 `;
 
-const FlagImage = styled.img`
-  max-width: 100%;
-  height: 200px;
-  object-fit: contain;
-  border: 3px solid #e9ecef;
-  border-radius: 10px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+const FLAG_MAX_WIDTH = 420;
+const FLAG_MAX_HEIGHT = 260;
+
+const FlagImage = styled.div`
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+
+  svg {
+    display: block;
+    max-width: ${FLAG_MAX_WIDTH}px;
+    max-height: ${FLAG_MAX_HEIGHT}px;
+    width: auto;
+    height: auto;
+  }
 `;
 
 const QuestionText = styled.h2`
   color: #333;
-  margin-top: 1rem;
+  margin: 0 0 1.25rem 0;
   font-size: 1.5rem;
+  text-align: center;
 `;
 
 const AnswerSection = styled.div`
@@ -167,6 +178,27 @@ const ErrorMessage = styled.div`
   margin-bottom: 1rem;
 `;
 
+function uniquifySvgIds(svg: string, prefix: string): string {
+  const ids = new Set<string>();
+  const idRegex = /\sid=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = idRegex.exec(svg)) !== null) {
+    ids.add(m[1]);
+  }
+  if (ids.size === 0) return svg;
+
+  let result = svg;
+  ids.forEach((id) => {
+    const newId = `${prefix}${id}`;
+    const escId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(`(\\sid=["'])${escId}(["'])`, 'g'), `$1${newId}$2`);
+    result = result.replace(new RegExp(`(href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
+    result = result.replace(new RegExp(`(xlink:href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
+    result = result.replace(new RegExp(`url\\(#${escId}\\)`, 'g'), `url(#${newId})`);
+  });
+  return result;
+}
+
 const GamePlay: React.FC = () => {
   const [currentQuestion, setCurrentQuestion] = useState<QuestionResponse | null>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
@@ -177,28 +209,72 @@ const GamePlay: React.FC = () => {
   const [gameId, setGameId] = useState<string | null>(null);
   const [wasSkipped, setWasSkipped] = useState(false);
   const navigate = useNavigate();
+  const didInitRef = useRef(false);
+
+  const normalizedFlagSvg = useMemo(() => {
+    if (!currentQuestion?.flag_svg) return '';
+    const idPrefix = `q${currentQuestion.question_id ?? 'x'}-`;
+    const withUniqueIds = uniquifySvgIds(currentQuestion.flag_svg, idPrefix);
+    return withUniqueIds.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
+      const widthMatch = attrs.match(/\swidth=["']([^"']+)["']/i);
+      const heightMatch = attrs.match(/\sheight=["']([^"']+)["']/i);
+      const viewBoxMatch = attrs.match(/\sviewBox=["']([^"']+)["']/i);
+
+      let newAttrs = attrs
+        .replace(/\swidth=["'][^"']*["']/gi, '')
+        .replace(/\sheight=["'][^"']*["']/gi, '')
+        .replace(/\spreserveAspectRatio=["'][^"']*["']/gi, '');
+
+      let vbW = 0;
+      let vbH = 0;
+      if (viewBoxMatch) {
+        const parts = viewBoxMatch[1].trim().split(/[\s,]+/).map(parseFloat);
+        if (parts.length === 4 && parts.every(Number.isFinite)) {
+          vbW = parts[2];
+          vbH = parts[3];
+        }
+      } else if (widthMatch && heightMatch) {
+        const w = parseFloat(widthMatch[1]);
+        const h = parseFloat(heightMatch[1]);
+        if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+          newAttrs += ` viewBox="0 0 ${w} ${h}"`;
+          vbW = w;
+          vbH = h;
+        }
+      }
+
+      newAttrs += ' preserveAspectRatio="xMidYMid meet"';
+
+      if (vbW > 0 && vbH > 0) {
+        const ratio = vbW / vbH;
+        const targetWidth = Math.min(FLAG_MAX_WIDTH, FLAG_MAX_HEIGHT * ratio);
+        const targetHeight = targetWidth / ratio;
+        return `<svg${newAttrs} width="${targetWidth}" height="${targetHeight}">`;
+      }
+      return `<svg${newAttrs} width="${FLAG_MAX_WIDTH}" height="${FLAG_MAX_HEIGHT}">`;
+    });
+  }, [currentQuestion?.flag_svg, currentQuestion?.question_id]);
 
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
     const storedGameId = localStorage.getItem('current_game_id');
     if (!storedGameId) {
       navigate('/game');
       return;
     }
     setGameId(storedGameId);
-    loadQuestion(storedGameId, 1);
+    loadQuestion(storedGameId);
   }, [navigate]);
 
-  const loadQuestion = async (gameId: string, questionNum: number) => {
+  const loadQuestion = async (gameId: string) => {
     setLoading(true);
     setError(null);
     setLastResult(null);
     setWasSkipped(false);
 
     try {
-      const response = await ApiService.getQuestion({
-        gameId,
-        questionNum,
-      });
+      const response = await ApiService.getQuestion({ gameId });
       setCurrentQuestion(response);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось загрузить вопрос');
@@ -208,7 +284,7 @@ const GamePlay: React.FC = () => {
   };
 
   const handleSubmitAnswer = async () => {
-    if (!gameId || !answer.trim()) return;
+    if (!gameId || !currentQuestion || !answer.trim()) return;
 
     setLoading(true);
     setError(null);
@@ -216,7 +292,7 @@ const GamePlay: React.FC = () => {
     try {
       const response = await ApiService.answerQuestion({
         gameId,
-        questionNum: questionNumber,
+        questionId: currentQuestion.question_id,
         answer: answer.trim(),
       });
       setLastResult(response);
@@ -231,23 +307,20 @@ const GamePlay: React.FC = () => {
 
   const handleNextQuestion = () => {
     if (!gameId) return;
-    
-    const nextQuestionNum = questionNumber + 1;
-    setQuestionNumber(nextQuestionNum);
-    loadQuestion(gameId, nextQuestionNum);
+    setQuestionNumber((n) => n + 1);
+    loadQuestion(gameId);
   };
 
   const handleSkipQuestion = async () => {
-    if (!gameId) return;
+    if (!gameId || !currentQuestion) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // Отправляем пустой ответ как "пропуск"
       const response = await ApiService.answerQuestion({
         gameId,
-        questionNum: questionNumber,
+        questionId: currentQuestion.question_id,
         answer: '',
       });
       setLastResult(response);
@@ -302,14 +375,8 @@ const GamePlay: React.FC = () => {
         ) : currentQuestion ? (
           <>
             <FlagContainer>
-              <FlagImage 
-                src={currentQuestion.flag_url} 
-                alt="Флаг страны"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjc2Nzc3Ij7QpNC70LDQsyDQvdC1INC90LDQudC00LXQvTwvdGV4dD48L3N2Zz4=';
-                }}
-              />
               <QuestionText>{currentQuestion.question_text}</QuestionText>
+              <FlagImage dangerouslySetInnerHTML={{ __html: normalizedFlagSvg }} />
             </FlagContainer>
 
             <AnswerSection>

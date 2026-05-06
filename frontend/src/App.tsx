@@ -5,6 +5,7 @@ import AuthForm from './components/Auth/AuthForm';
 import GameStart from './components/Game/GameStart';
 import GamePlay from './components/Game/GamePlay';
 import GameResults from './components/Game/GameResults';
+import FlagsDebug from './components/Debug/FlagsDebug';
 import ProtectedRoute from './components/ProtectedRoute';
 import { TokenUtils } from './services/api';
 
@@ -61,6 +62,9 @@ function App() {
               )
             } 
           />
+
+          {/* Открытый отладочный маршрут: рендерит все флаги в FlagContainer */}
+          <Route path="/debug/flags" element={<FlagsDebug />} />
           
           {/* Защищенные маршруты */}
           <Route

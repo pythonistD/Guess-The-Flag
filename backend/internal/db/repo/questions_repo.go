@@ -34,11 +34,20 @@ func (q *QuestionsRepo) GetGameQuestions(ctx context.Context, id uuid.UUID) (*mo
 	return &question, nil
 }
 
-func (q *QuestionsRepo) GetQuestionsWithAnswers(ctx context.Context, gameId uuid.UUID) ([]models.QuestionWithAnswers, error) {
+func (q *QuestionsRepo) GetQuestionsWithAnswers(ctx context.Context, gameId uuid.UUID, langCode string) ([]models.QuestionWithAnswers, error) {
 	var questionsWithAnswer []models.QuestionWithAnswers
-	err := q.db.SelectContext(ctx, &questionsWithAnswer, queries.QuestionQueries.GetQuestionsWithAnswers, gameId)
+	err := q.db.SelectContext(ctx, &questionsWithAnswer, queries.QuestionQueries.GetQuestionsWithAnswers, gameId, langCode)
 	if err != nil {
 		return nil, fmt.Errorf("error getting questions with answers: %w", err)
 	}
 	return questionsWithAnswer, nil
+}
+
+func (q *QuestionsRepo) GetQuestion(ctx context.Context, questionId uuid.UUID) (*models.Question, error) {
+	var question models.Question
+	err := q.db.GetContext(ctx, &question, queries.QuestionQueries.GetQuestion, questionId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get question: %w", err)
+	}
+	return &question, nil
 }
