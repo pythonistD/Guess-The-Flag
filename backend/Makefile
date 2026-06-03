@@ -18,6 +18,9 @@ migrate-status:
 	@echo "Migration status:"
 	goose -dir $(MIGRATION_DIR) $(DB_DRIVER) $(DB_URL) status
 
+migrate-create:
+	@echo "Enter migration name: $(name)"
+	goose -dir $(MIGRATION_DIR) create $(name) sql
 
 run: ## Запустить основное приложение локально
 	@echo "$(GREEN)Запуск основного приложения...$(NC)"

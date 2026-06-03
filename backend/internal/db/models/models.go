@@ -18,6 +18,7 @@ type Game struct {
 	GameId       uuid.UUID `db:"game_id"`
 	UserId       uuid.UUID `db:"user_id"`
 	LanguageCode string    `db:"language_code"`
+	GameVariant  string    `db:"game_variant"`
 	StartedAt    time.Time `db:"started_at"`
 	EndedAt      time.Time `db:"ended_at"`
 }
@@ -44,11 +45,12 @@ type Question struct {
 }
 
 type Answer struct {
-	AnswerId   uuid.UUID `db:"answer_id"`
-	QuestionId uuid.UUID `db:"question_id"`
-	AnswerText string    `db:"answer"`
-	AnsweredAt time.Time `db:"answered_at"`
-	IsCorrect  bool      `db:"is_correct"`
+	AnswerId          uuid.UUID `db:"answer_id"`
+	QuestionId        uuid.UUID `db:"question_id"`
+	AnswerText        string    `db:"answer"`
+	AnsweredAt        time.Time `db:"answered_at"`
+	IsCorrect         bool      `db:"is_correct"`
+	SelectedCountryId *int      `db:"selected_country_id"`
 }
 
 type QuestionWithAnswers struct {

@@ -2,13 +2,24 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import styled from 'styled-components';
 import { ApiService } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
-import { QuestionResponse, AnswerResponse } from '../../types/api';
+import { QuestionResponse, AnswerResponse, GameVariant } from '../../types/api';
+
+function svgToDataUrl(svg: string): string {
+  const encoded = encodeURIComponent(svg)
+    .replace(/'/g, '%27')
+    .replace(/"/g, '%22');
+  return `data:image/svg+xml;charset=utf-8,${encoded}`;
+}
+
+function variantLabel(variant: GameVariant): string {
+  return variant === 'multiple_choice' ? 'Выбор из вариантов' : 'Ввод с клавиатуры';
+}
 
 const Container = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #e9edf2;
   padding: 20px;
 `;
 
@@ -17,32 +28,52 @@ const Header = styled.div`
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
+const HeaderLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 `;
 
 const QuestionCounter = styled.div`
-  color: white;
+  color: #1f2937;
   font-size: 1.2rem;
   font-weight: bold;
 `;
 
+const VariantBadge = styled.div`
+  display: inline-block;
+  width: fit-content;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1f4b99;
+  font-size: 0.8rem;
+  font-weight: 600;
+`;
+
 const EndGameButton = styled.button`
   padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #c8d0db;
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.3s;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: #f4f6f9;
   }
 `;
 
 const GameCard = styled.div`
   background: white;
   border-radius: 15px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  border: 1px solid #d5dce6;
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.12);
   overflow: hidden;
   max-width: 600px;
   width: 100%;
@@ -52,37 +83,54 @@ const GameCard = styled.div`
 const FlagContainer = styled.div`
   padding: 2rem;
   text-align: center;
-  background:rgb(234, 234, 234);
+  background: #d9dee5;
+  border-bottom: 1px solid #c5ccd6;
 `;
 
 const FLAG_MAX_WIDTH = 420;
 const FLAG_MAX_HEIGHT = 260;
+const TEXT_ANSWER_MIN_HEIGHT = 96;
+const MC_ANSWER_MIN_HEIGHT = 260;
 
-const FlagImage = styled.div`
+const FlagFrame = styled.div`
+  width: 100%;
+  max-width: ${FLAG_MAX_WIDTH}px;
+  height: ${FLAG_MAX_HEIGHT}px;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 0;
+`;
 
-  svg {
-    display: block;
-    max-width: ${FLAG_MAX_WIDTH}px;
-    max-height: ${FLAG_MAX_HEIGHT}px;
-    width: auto;
-    height: auto;
-  }
+const FlagImage = styled.img`
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  box-shadow: 0 0 0 1px #c5ccd6;
 `;
 
 const QuestionText = styled.h2`
   color: #333;
   margin: 0 0 1.25rem 0;
   font-size: 1.5rem;
+  line-height: 1.3;
+  min-height: 2.6rem;
   text-align: center;
 `;
 
 const AnswerSection = styled.div`
   padding: 2rem;
+`;
+
+const AnswerContent = styled.div<{ $minHeight: number }>`
+  min-height: ${({ $minHeight }) => $minHeight}px;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 `;
 
 const AnswerInput = styled.input`
@@ -91,12 +139,40 @@ const AnswerInput = styled.input`
   border: 2px solid #e1e5e9;
   border-radius: 8px;
   font-size: 1.1rem;
-  margin-bottom: 1rem;
   transition: border-color 0.3s;
 
   &:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #1f4b99;
+  }
+`;
+
+const OptionsGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+`;
+
+const OptionButton = styled.button<{ selected?: boolean }>`
+  width: 100%;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 2px solid ${({ selected }) => (selected ? '#1f4b99' : '#e1e5e9')};
+  background: ${({ selected }) => (selected ? '#eef2ff' : '#ffffff')};
+  color: #1f2937;
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    border-color: #1f4b99;
+    background: #f8faff;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 `;
 
@@ -117,9 +193,10 @@ const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
   ${({ variant = 'primary' }) =>
     variant === 'primary'
       ? `
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #1f4b99;
         color: white;
         &:hover {
+          background: #183d80;
           transform: translateY(-2px);
         }
       `
@@ -139,24 +216,54 @@ const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
   }
 `;
 
-const ResultMessage = styled.div<{ isCorrect: boolean }>`
-  padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  font-weight: bold;
-  text-align: center;
+const ResultBanner = styled.div<{ $isCorrect: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  width: 100%;
 
-  ${({ isCorrect }) =>
-    isCorrect
+  ${({ $isCorrect }) =>
+    $isCorrect
       ? `
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
+        background: #f0fdf4;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        box-shadow: inset 4px 0 0 #22c55e;
       `
       : `
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
+        background: #fff1f2;
+        color: #9f1239;
+        border: 1px solid #fecdd3;
+        box-shadow: inset 4px 0 0 #f43f5e;
+      `}
+`;
+
+const ResultIcon = styled.span<{ $isCorrect: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+
+  ${({ $isCorrect }) =>
+    $isCorrect
+      ? `
+        background: #22c55e;
+        color: #ffffff;
+      `
+      : `
+        background: #f43f5e;
+        color: #ffffff;
       `}
 `;
 
@@ -178,82 +285,25 @@ const ErrorMessage = styled.div`
   margin-bottom: 1rem;
 `;
 
-function uniquifySvgIds(svg: string, prefix: string): string {
-  const ids = new Set<string>();
-  const idRegex = /\sid=["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = idRegex.exec(svg)) !== null) {
-    ids.add(m[1]);
-  }
-  if (ids.size === 0) return svg;
-
-  let result = svg;
-  ids.forEach((id) => {
-    const newId = `${prefix}${id}`;
-    const escId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    result = result.replace(new RegExp(`(\\sid=["'])${escId}(["'])`, 'g'), `$1${newId}$2`);
-    result = result.replace(new RegExp(`(href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
-    result = result.replace(new RegExp(`(xlink:href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
-    result = result.replace(new RegExp(`url\\(#${escId}\\)`, 'g'), `url(#${newId})`);
-  });
-  return result;
-}
-
 const GamePlay: React.FC = () => {
   const [currentQuestion, setCurrentQuestion] = useState<QuestionResponse | null>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
   const [answer, setAnswer] = useState('');
+  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [lastResult, setLastResult] = useState<AnswerResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
-  const [wasSkipped, setWasSkipped] = useState(false);
+  const [gameVariant, setGameVariant] = useState<GameVariant>('text_input');
   const navigate = useNavigate();
   const didInitRef = useRef(false);
 
-  const normalizedFlagSvg = useMemo(() => {
+  const isMultipleChoice = gameVariant === 'multiple_choice';
+
+  const flagSvgUrl = useMemo(() => {
     if (!currentQuestion?.flag_svg) return '';
-    const idPrefix = `q${currentQuestion.question_id ?? 'x'}-`;
-    const withUniqueIds = uniquifySvgIds(currentQuestion.flag_svg, idPrefix);
-    return withUniqueIds.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
-      const widthMatch = attrs.match(/\swidth=["']([^"']+)["']/i);
-      const heightMatch = attrs.match(/\sheight=["']([^"']+)["']/i);
-      const viewBoxMatch = attrs.match(/\sviewBox=["']([^"']+)["']/i);
-
-      let newAttrs = attrs
-        .replace(/\swidth=["'][^"']*["']/gi, '')
-        .replace(/\sheight=["'][^"']*["']/gi, '')
-        .replace(/\spreserveAspectRatio=["'][^"']*["']/gi, '');
-
-      let vbW = 0;
-      let vbH = 0;
-      if (viewBoxMatch) {
-        const parts = viewBoxMatch[1].trim().split(/[\s,]+/).map(parseFloat);
-        if (parts.length === 4 && parts.every(Number.isFinite)) {
-          vbW = parts[2];
-          vbH = parts[3];
-        }
-      } else if (widthMatch && heightMatch) {
-        const w = parseFloat(widthMatch[1]);
-        const h = parseFloat(heightMatch[1]);
-        if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-          newAttrs += ` viewBox="0 0 ${w} ${h}"`;
-          vbW = w;
-          vbH = h;
-        }
-      }
-
-      newAttrs += ' preserveAspectRatio="xMidYMid meet"';
-
-      if (vbW > 0 && vbH > 0) {
-        const ratio = vbW / vbH;
-        const targetWidth = Math.min(FLAG_MAX_WIDTH, FLAG_MAX_HEIGHT * ratio);
-        const targetHeight = targetWidth / ratio;
-        return `<svg${newAttrs} width="${targetWidth}" height="${targetHeight}">`;
-      }
-      return `<svg${newAttrs} width="${FLAG_MAX_WIDTH}" height="${FLAG_MAX_HEIGHT}">`;
-    });
-  }, [currentQuestion?.flag_svg, currentQuestion?.question_id]);
+    return svgToDataUrl(currentQuestion.flag_svg);
+  }, [currentQuestion?.flag_svg]);
 
   useEffect(() => {
     if (didInitRef.current) return;
@@ -263,19 +313,26 @@ const GamePlay: React.FC = () => {
       navigate('/game');
       return;
     }
+    const storedVariant = localStorage.getItem('current_game_variant') as GameVariant | null;
+    if (storedVariant === 'text_input' || storedVariant === 'multiple_choice') {
+      setGameVariant(storedVariant);
+    }
     setGameId(storedGameId);
     loadQuestion(storedGameId);
   }, [navigate]);
 
-  const loadQuestion = async (gameId: string) => {
+  const loadQuestion = async (id: string) => {
     setLoading(true);
     setError(null);
     setLastResult(null);
-    setWasSkipped(false);
+    setAnswer('');
+    setSelectedCountryId(null);
 
     try {
-      const response = await ApiService.getQuestion({ gameId });
+      const response = await ApiService.getQuestion({ gameId: id });
       setCurrentQuestion(response);
+      setGameVariant(response.variant);
+      localStorage.setItem('current_game_variant', response.variant);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось загрузить вопрос');
     } finally {
@@ -284,20 +341,30 @@ const GamePlay: React.FC = () => {
   };
 
   const handleSubmitAnswer = async () => {
-    if (!gameId || !currentQuestion || !answer.trim()) return;
+    if (!gameId || !currentQuestion) return;
+    if (isMultipleChoice && selectedCountryId === null) return;
+    if (!isMultipleChoice && !answer.trim()) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await ApiService.answerQuestion({
-        gameId,
-        questionId: currentQuestion.question_id,
-        answer: answer.trim(),
-      });
+      const response = await ApiService.answerQuestion(
+        isMultipleChoice
+          ? {
+              gameId,
+              questionId: currentQuestion.question_id,
+              selected_country: selectedCountryId!,
+            }
+          : {
+              gameId,
+              questionId: currentQuestion.question_id,
+              answer: answer.trim(),
+            }
+      );
       setLastResult(response);
       setAnswer('');
-      setWasSkipped(false);
+      setSelectedCountryId(null);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось отправить ответ');
     } finally {
@@ -312,20 +379,25 @@ const GamePlay: React.FC = () => {
   };
 
   const handleSkipQuestion = async () => {
-    if (!gameId || !currentQuestion) return;
+    if (!gameId || !currentQuestion || loading) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await ApiService.answerQuestion({
+      await ApiService.answerQuestion({
         gameId,
         questionId: currentQuestion.question_id,
-        answer: '',
+        skipped: true,
       });
-      setLastResult(response);
+      setQuestionNumber((n) => n + 1);
+      const response = await ApiService.getQuestion({ gameId });
+      setCurrentQuestion(response);
+      setGameVariant(response.variant);
+      localStorage.setItem('current_game_variant', response.variant);
       setAnswer('');
-      setWasSkipped(true);
+      setSelectedCountryId(null);
+      setLastResult(null);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось пропустить вопрос');
     } finally {
@@ -338,8 +410,9 @@ const GamePlay: React.FC = () => {
 
     try {
       const results = await ApiService.endGame({ gameId });
-      localStorage.setItem('game_results', JSON.stringify(results));
+      localStorage.setItem('game_results', JSON.stringify(Array.isArray(results) ? results : []));
       localStorage.removeItem('current_game_id');
+      localStorage.removeItem('current_game_variant');
       navigate('/game/results');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось завершить игру');
@@ -347,6 +420,7 @@ const GamePlay: React.FC = () => {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (isMultipleChoice) return;
     if (e.key === 'Enter' && !loading && answer.trim()) {
       if (lastResult) {
         handleNextQuestion();
@@ -356,6 +430,12 @@ const GamePlay: React.FC = () => {
     }
   };
 
+  const canSubmit = isMultipleChoice
+    ? selectedCountryId !== null
+    : answer.trim().length > 0;
+
+  const answerContentMinHeight = isMultipleChoice ? MC_ANSWER_MIN_HEIGHT : TEXT_ANSWER_MIN_HEIGHT;
+
   if (!gameId) {
     return <LoadingSpinner>Загрузка игры...</LoadingSpinner>;
   }
@@ -363,7 +443,10 @@ const GamePlay: React.FC = () => {
   return (
     <Container>
       <Header>
-        <QuestionCounter>Вопрос {questionNumber}</QuestionCounter>
+        <HeaderLeft>
+          <QuestionCounter>Вопрос {questionNumber}</QuestionCounter>
+          <VariantBadge>{variantLabel(gameVariant)}</VariantBadge>
+        </HeaderLeft>
         <EndGameButton onClick={handleEndGame}>
           Завершить игру
         </EndGameButton>
@@ -376,20 +459,37 @@ const GamePlay: React.FC = () => {
           <>
             <FlagContainer>
               <QuestionText>{currentQuestion.question_text}</QuestionText>
-              <FlagImage dangerouslySetInnerHTML={{ __html: normalizedFlagSvg }} />
+              <FlagFrame>
+                {flagSvgUrl && <FlagImage src={flagSvgUrl} alt="Флаг страны" />}
+              </FlagFrame>
             </FlagContainer>
 
             <AnswerSection>
               {error && <ErrorMessage>{error}</ErrorMessage>}
-              
-              {lastResult && (
-                <ResultMessage isCorrect={lastResult.is_correct}>
-                  {wasSkipped ? '⏭️ Вопрос пропущен' : lastResult.is_correct ? '✅ Правильно!' : '❌ Неправильно!'}
-                </ResultMessage>
-              )}
 
-              {!lastResult && (
-                <>
+              <AnswerContent $minHeight={answerContentMinHeight}>
+                {lastResult ? (
+                  <ResultBanner $isCorrect={lastResult.is_correct}>
+                    <ResultIcon $isCorrect={lastResult.is_correct}>
+                      {lastResult.is_correct ? '✓' : '✗'}
+                    </ResultIcon>
+                    {lastResult.is_correct ? 'Правильно!' : 'Неправильно'}
+                  </ResultBanner>
+                ) : isMultipleChoice ? (
+                  <OptionsGrid>
+                    {(currentQuestion.options ?? []).map((option) => (
+                      <OptionButton
+                        key={option.country_id}
+                        type="button"
+                        selected={selectedCountryId === option.country_id}
+                        onClick={() => setSelectedCountryId(option.country_id)}
+                        disabled={loading}
+                      >
+                        {option.name}
+                      </OptionButton>
+                    ))}
+                  </OptionsGrid>
+                ) : (
                   <AnswerInput
                     type="text"
                     placeholder="Введите название страны..."
@@ -398,10 +498,24 @@ const GamePlay: React.FC = () => {
                     onKeyPress={handleKeyPress}
                     disabled={loading}
                   />
-                  <ButtonGroup>
+                )}
+              </AnswerContent>
+
+              <ButtonGroup>
+                {lastResult ? (
+                  <>
+                    <Button onClick={handleNextQuestion}>
+                      Следующий вопрос
+                    </Button>
+                    <Button variant="secondary" onClick={handleEndGame}>
+                      Завершить игру
+                    </Button>
+                  </>
+                ) : (
+                  <>
                     <Button
                       onClick={handleSubmitAnswer}
-                      disabled={loading || !answer.trim()}
+                      disabled={loading || !canSubmit}
                     >
                       {loading ? 'Отправка...' : 'Ответить'}
                     </Button>
@@ -412,20 +526,9 @@ const GamePlay: React.FC = () => {
                     >
                       Пропустить
                     </Button>
-                  </ButtonGroup>
-                </>
-              )}
-
-              {lastResult && (
-                <ButtonGroup>
-                  <Button onClick={handleNextQuestion}>
-                    Следующий вопрос
-                  </Button>
-                  <Button variant="secondary" onClick={handleEndGame}>
-                    Завершить игру
-                  </Button>
-                </ButtonGroup>
-              )}
+                  </>
+                )}
+              </ButtonGroup>
             </AnswerSection>
           </>
         ) : (
@@ -436,4 +539,4 @@ const GamePlay: React.FC = () => {
   );
 };
 
-export default GamePlay; 
+export default GamePlay;

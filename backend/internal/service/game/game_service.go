@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/pythonistD/Guess-The-Flag/internal/service/game/algo"
 	"strings"
 	"time"
+
+	"github.com/pythonistD/Guess-The-Flag/internal/service/game/algo"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -19,6 +20,11 @@ import (
 const (
 	questionNumToPregenerate int = 5
 )
+
+type StartGameResult struct {
+	GameId  uuid.UUID
+	Variant GameVariant
+}
 
 type Service struct {
 	gamesRepo     *repo.GamesRepo
@@ -45,32 +51,34 @@ func NewService(db *sqlx.DB, gameStore storage.GameStorage, countryStore storage
 	}
 }
 
-func (s *Service) StartGame(ctx context.Context, langCode string) (uuid.UUID, error) {
+func (s *Service) StartGame(ctx context.Context, langCode string) (*StartGameResult, error) {
 	userId := ctx.Value("userId").(uuid.UUID)
 	gameId := uuid.New()
+	variant := assignGameVariant()
 
-	s.gameStorage.InitStorageState(gameId, langCode)
+	s.gameStorage.InitStorageState(gameId, langCode, string(variant))
 
 	gameModel := models.Game{
 		GameId:       gameId,
 		UserId:       userId,
 		LanguageCode: langCode,
+		GameVariant:  string(variant),
 		StartedAt:    time.Now(),
 	}
 
 	err := s.gamesRepo.Start(ctx, &gameModel)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to start game: %w", err)
+		return nil, fmt.Errorf("failed to start game: %w", err)
 	}
 	questions, err := s.generateQuestions(storage.QuestionsBuffSize, gameId)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to start game: %w", err)
+		return nil, fmt.Errorf("failed to start game: %w", err)
 	}
 	err = s.gameStorage.SetQuestions(gameId, questions)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to start game: %w", err)
+		return nil, fmt.Errorf("failed to start game: %w", err)
 	}
-	return gameId, nil
+	return &StartGameResult{GameId: gameId, Variant: variant}, nil
 }
 
 // EndGame deletes questions from gameState, returns game`s answers
@@ -95,7 +103,7 @@ func (s *Service) EndGame(ctx context.Context, gameId uuid.UUID) ([]models.Quest
 	return questionsWithAnswer, nil
 }
 
-func (s *Service) GetQuestion(ctx context.Context, gameId uuid.UUID) (*schema.QuestionResp, error) {
+func (s *Service) GetQuestion(ctx context.Context, gameId uuid.UUID) (any, error) {
 	question, err := s.gameStorage.GetQuestion(gameId)
 	if err != nil {
 		if errors.Is(err, storage.GameIdError) {
@@ -126,22 +134,69 @@ func (s *Service) GetQuestion(ctx context.Context, gameId uuid.UUID) (*schema.Qu
 	if err != nil {
 		return nil, fmt.Errorf("failed to save question to DB: %w", err)
 	}
-	return &schema.QuestionResp{QuestionText: question.QuestionText, FlagSVG: question.FlagSVG, QuestionID: questionDB.QuestionId}, nil
+
+	variant, err := s.gameStorage.GetGameVariant(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game variant: %w", err)
+	}
+
+	base := schema.QuestionResp{
+		QuestionText: question.QuestionText,
+		FlagSVG:      question.FlagSVG,
+		QuestionID:   questionDB.QuestionId,
+		Variant:      variant,
+	}
+
+	if GameVariant(variant) == GameVariantMultipleChoice {
+		langCode, err := s.gameStorage.GetGameLangCode(gameId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get game lang code: %w", err)
+		}
+		usedCountries, err := s.gameStorage.GetUsedCountries(gameId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get used countries: %w", err)
+		}
+		options, err := GenerateOptions(s.countryStore, question.CountryId, langCode, usedCountries)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate options: %w", err)
+		}
+		return &schema.MultipleChoiceQuestionResp{
+			QuestionResp: base,
+			Options:      options,
+		}, nil
+	}
+
+	return &base, nil
 }
 
-func (s *Service) AnswerTheQuestion(ctx context.Context, gameId uuid.UUID, questionId uuid.UUID, answerText string) (*schema.AnswerResp, error) {
-	// todo: сейчас вопрос берётся из бд, для оптимизации брать из буфера(кэша game state)
+func (s *Service) AnswerTheQuestion(
+	ctx context.Context,
+	gameId uuid.UUID,
+	questionId uuid.UUID,
+	req schema.AnswerReq,
+) (*schema.AnswerResp, error) {
 	countryId, err := s.getQuestionAnswer(ctx, questionId)
-	langCode, err := s.gameStorage.GetGameLangCode(gameId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get question answer: %w", err)
 	}
 
-	isCorrect, err := s.isAnswerCorrect(ctx, countryId, answerText, langCode)
+	langCode, err := s.gameStorage.GetGameLangCode(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game lang code: %w", err)
+	}
+
+	variantStr, err := s.gameStorage.GetGameVariant(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game variant: %w", err)
+	}
+	variant := GameVariant(variantStr)
+
+	isCorrect, answerText, selectedCountryId, err := s.gradeAnswer(ctx, variant, req, countryId, langCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to answer the question: %w", err)
 	}
-	err = s.SaveAnswer(ctx, questionId, answerText, isCorrect)
+
+	err = s.SaveAnswer(ctx, questionId, answerText, isCorrect, selectedCountryId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to answer the question: %w", err)
 	}
@@ -194,13 +249,14 @@ func (s *Service) isAnswerCorrect(ctx context.Context, countryId int, answer, la
 	return false, nil
 }
 
-func (s *Service) SaveAnswer(ctx context.Context, questionId uuid.UUID, answerText string, isCorrect bool) error {
+func (s *Service) SaveAnswer(ctx context.Context, questionId uuid.UUID, answerText string, isCorrect bool, selectedCountryId *int) error {
 	answer := models.Answer{
-		AnswerId:   uuid.New(),
-		QuestionId: questionId,
-		AnswerText: answerText,
-		IsCorrect:  isCorrect,
-		AnsweredAt: time.Now(),
+		AnswerId:          uuid.New(),
+		QuestionId:        questionId,
+		AnswerText:        answerText,
+		IsCorrect:         isCorrect,
+		AnsweredAt:        time.Now(),
+		SelectedCountryId: selectedCountryId,
 	}
 	err := s.answersRepo.Create(ctx, &answer)
 	if err != nil {

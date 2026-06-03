@@ -1,4 +1,4 @@
-package main
+package filldb
 
 type Country struct {
 	Name         CountryName            `json:"name"`

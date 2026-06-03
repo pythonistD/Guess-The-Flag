@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { ApiService, TokenUtils } from '../../services/api';
+import { GameVariant } from '../../types/api';
 import { useNavigate } from 'react-router-dom';
 
 const Container = styled.div`
@@ -9,7 +10,7 @@ const Container = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #e9edf2;
   padding: 20px;
 `;
 
@@ -21,35 +22,33 @@ const Header = styled.div`
 
 const LogoutButton = styled.button`
   padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #c8d0db;
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.3s;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: #f4f6f9;
   }
 `;
 
 const GameCard = styled.div`
-  background: white;
+  background: #ffffff;
   padding: 3rem;
   border-radius: 15px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  border: 1px solid #d5dce6;
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.12);
   text-align: center;
   max-width: 500px;
   width: 100%;
 `;
 
 const Title = styled.h1`
-  color: #333;
+  color: #1f2937;
   margin-bottom: 1rem;
   font-size: 2.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 `;
 
 const Subtitle = styled.h2`
@@ -68,7 +67,7 @@ const Description = styled.p`
 
 const StartButton = styled.button`
   padding: 1.2rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #1f4b99;
   color: white;
   border: none;
   border-radius: 10px;
@@ -79,6 +78,7 @@ const StartButton = styled.button`
 
   &:hover {
     transform: translateY(-3px);
+    background: #183d80;
   }
 
   &:disabled {
@@ -98,13 +98,33 @@ const ErrorMessage = styled.div`
 `;
 
 const FlagIcon = styled.div`
-  font-size: 4rem;
+  color: #4b5563;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   margin-bottom: 1rem;
 `;
+
+const VariantBadge = styled.div`
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1f4b99;
+  font-size: 0.85rem;
+  font-weight: 600;
+`;
+
+function variantLabel(variant: GameVariant): string {
+  return variant === 'multiple_choice' ? 'Режим: выбор из вариантов' : 'Режим: ввод с клавиатуры';
+}
 
 const GameStart: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastVariant, setLastVariant] = useState<GameVariant | null>(null);
   const navigate = useNavigate();
 
   const handleStartGame = async () => {
@@ -113,8 +133,9 @@ const GameStart: React.FC = () => {
 
     try {
       const response = await ApiService.startGame();
-      // Сохраняем ID игры в localStorage для использования в игровых компонентах
       localStorage.setItem('current_game_id', response.game_id);
+      localStorage.setItem('current_game_variant', response.variant);
+      setLastVariant(response.variant);
       navigate('/game/play');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось начать игру');
@@ -138,14 +159,15 @@ const GameStart: React.FC = () => {
       </Header>
 
       <GameCard>
-        <FlagIcon>🏁</FlagIcon>
+        <FlagIcon>Тренировка</FlagIcon>
         <Title>Угадай Флаг</Title>
         <Subtitle>Проверь свои знания флагов стран мира!</Subtitle>
         <Description>
-          В этой игре тебе предстоит угадывать страны по их флагам. 
-          Будут показаны флаги различных стран, а твоя задача - правильно 
-          назвать страну. Готов к вызову?
+          В этой игре тебе предстоит угадывать страны по их флагам.
+          Режим игры выбирается случайно: ввод названия с клавиатуры или выбор из четырёх вариантов.
         </Description>
+
+        {lastVariant && <VariantBadge>{variantLabel(lastVariant)}</VariantBadge>}
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
 

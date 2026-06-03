@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
+	"github.com/pythonistD/Guess-The-Flag/internal/db/models"
 	"github.com/pythonistD/Guess-The-Flag/internal/schema"
 	"github.com/pythonistD/Guess-The-Flag/internal/service/game"
 	"go.uber.org/zap"
@@ -34,7 +35,7 @@ func (handler *GameHandler) Start(w http.ResponseWriter, r *http.Request) {
 		langCode = "rus"
 	}
 
-	gameId, err := handler.gameService.StartGame(r.Context(), langCode)
+	result, err := handler.gameService.StartGame(r.Context(), langCode)
 	if err != nil {
 		handler.logger.Error("Failed to start game", zap.Error(err))
 		http.Error(w, "Failed to start game", http.StatusInternalServerError)
@@ -44,7 +45,8 @@ func (handler *GameHandler) Start(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(
 		schema.StartGameResp{
-			GameId: gameId.String(),
+			GameId:  result.GameId.String(),
+			Variant: string(result.Variant),
 		},
 	)
 	if err != nil {
@@ -124,7 +126,7 @@ func (handler *GameHandler) AnswerTheQuestion(w http.ResponseWriter, r *http.Req
 		http.Error(w, fmt.Sprintf("failed to decode the request: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
-	resp, err := handler.gameService.AnswerTheQuestion(r.Context(), gameId, questionId, req.Answer)
+	resp, err := handler.gameService.AnswerTheQuestion(r.Context(), gameId, questionId, req)
 	if err != nil {
 		handler.logger.Error("failed to answer the question", zap.Error(err))
 		http.Error(w, fmt.Sprintf("failed to answer the question: %s", err.Error()), http.StatusInternalServerError)
@@ -179,6 +181,9 @@ func (handler *GameHandler) End(w http.ResponseWriter, r *http.Request) {
 		handler.logger.Error("failed to end the game", zap.Error(err))
 		http.Error(w, fmt.Sprintf("failed to end the game: %s", err.Error()), http.StatusInternalServerError)
 		return
+	}
+	if questionsWithAnswer == nil {
+		questionsWithAnswer = []models.QuestionWithAnswers{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(questionsWithAnswer)

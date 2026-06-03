@@ -7,8 +7,8 @@ var GameQueries = struct {
 	GetLastUserGame string
 }{
 	Start: `
-		INSERT INTO games (game_id, user_id, started_at)
-		VALUES (:game_id, :user_id, :started_at)
+		INSERT INTO games (game_id, user_id, started_at, game_variant)
+		VALUES (:game_id, :user_id, :started_at, :game_variant)
 	`,
 	End: `
 		UPDATE games
@@ -16,12 +16,12 @@ var GameQueries = struct {
 		WHERE game_id = :game_id
 	`,
 	GetByID: `
-		SELECT game_id, user_id, started_at, ended_at
+		SELECT game_id, user_id, started_at, ended_at, game_variant
 		FROM games
 		WHERE game_id = $1
 	`,
 	GetLastUserGame: `
-		SELECT game_id, user_id, started_at, ended_at
+		SELECT game_id, user_id, started_at, ended_at, game_variant
 				FROM games
 				WHERE user_id = $1
 				ORDER BY started_at DESC

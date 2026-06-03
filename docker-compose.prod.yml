@@ -1,0 +1,118 @@
+# Production stack for VPS with Traefik (reverse proxy + TLS).
+# Все настройки — в config.yml (database, secret, deploy.domain, traefik_*).
+#
+# Usage (Linux):
+#   docker compose -f docker-compose.prod.yml \
+#     --env-file <(go run ./backend/cli compose-env --config=config.yml) \
+#     up -d --build
+#
+# Or: make prod-up
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: guess_the_flag_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run: go run ./backend/cli compose-env --config=config.yml}
+      POSTGRES_DB: ${POSTGRES_DB:-guess_the_flag}
+    volumes:
+      - postgres_data_guess_the_flag:/var/lib/postgresql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-guess_the_flag}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app_network
+
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:3.24.1
+    container_name: guess_the_flag_migrate
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: >-
+        host=postgres port=5432
+        user=${POSTGRES_USER:-postgres}
+        password=${POSTGRES_PASSWORD}
+        dbname=${POSTGRES_DB:-guess_the_flag}
+        sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
+    restart: "no"
+
+  filldb:
+    image: guess_the_flag_backend:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guess_the_flag_filldb
+    entrypoint: ["/app/cli"]
+    command: ["database", "fill", "--config=/app/config.yml"]
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - app_network
+    restart: "no"
+
+  backend:
+    image: guess_the_flag_backend:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guess_the_flag_backend
+    restart: unless-stopped
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+    depends_on:
+      filldb:
+        condition: service_completed_successfully
+    networks:
+      - app_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Same-origin API via nginx proxy (see frontend/nginx.conf)
+        REACT_APP_API_BASE_URL: ""
+    container_name: guess_the_flag_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - app_network
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-guess-the-flag}.rule=Host(`${DOMAIN:?set deploy.domain in config.yml}`)
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-guess-the-flag}.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-guess-the-flag}.tls=true
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-guess-the-flag}.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.${TRAEFIK_ROUTER_NAME:-guess-the-flag}.loadbalancer.server.port=80
+
+volumes:
+  postgres_data_guess_the_flag:
+
+networks:
+  app_network:
+    driver: bridge
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

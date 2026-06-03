@@ -6,75 +6,18 @@ import { QuestionWithAnswer } from '../../types/api';
 const FLAG_MAX_WIDTH = 120;
 const FLAG_MAX_HEIGHT = 80;
 
-function uniquifySvgIds(svg: string, prefix: string): string {
-  const ids = new Set<string>();
-  const idRegex = /\sid=["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = idRegex.exec(svg)) !== null) {
-    ids.add(m[1]);
-  }
-  if (ids.size === 0) return svg;
-
-  let result = svg;
-  ids.forEach((id) => {
-    const newId = `${prefix}${id}`;
-    const escId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    result = result.replace(new RegExp(`(\\sid=["'])${escId}(["'])`, 'g'), `$1${newId}$2`);
-    result = result.replace(new RegExp(`(href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
-    result = result.replace(new RegExp(`(xlink:href=["'])#${escId}(["'])`, 'g'), `$1#${newId}$2`);
-    result = result.replace(new RegExp(`url\\(#${escId}\\)`, 'g'), `url(#${newId})`);
-  });
-  return result;
-}
-
-function normalizeFlagSvg(raw: string, idPrefix: string): string {
-  if (!raw) return '';
-  const withUniqueIds = uniquifySvgIds(raw, idPrefix);
-  return withUniqueIds.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
-    const widthMatch = attrs.match(/\swidth=["']([^"']+)["']/i);
-    const heightMatch = attrs.match(/\sheight=["']([^"']+)["']/i);
-    const viewBoxMatch = attrs.match(/\sviewBox=["']([^"']+)["']/i);
-
-    let newAttrs = attrs
-      .replace(/\swidth=["'][^"']*["']/gi, '')
-      .replace(/\sheight=["'][^"']*["']/gi, '')
-      .replace(/\spreserveAspectRatio=["'][^"']*["']/gi, '');
-
-    let vbW = 0;
-    let vbH = 0;
-    if (viewBoxMatch) {
-      const parts = viewBoxMatch[1].trim().split(/[\s,]+/).map(parseFloat);
-      if (parts.length === 4 && parts.every(Number.isFinite)) {
-        vbW = parts[2];
-        vbH = parts[3];
-      }
-    } else if (widthMatch && heightMatch) {
-      const w = parseFloat(widthMatch[1]);
-      const h = parseFloat(heightMatch[1]);
-      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-        newAttrs += ` viewBox="0 0 ${w} ${h}"`;
-        vbW = w;
-        vbH = h;
-      }
-    }
-
-    newAttrs += ' preserveAspectRatio="xMidYMid meet"';
-
-    if (vbW > 0 && vbH > 0) {
-      const ratio = vbW / vbH;
-      const targetWidth = Math.min(FLAG_MAX_WIDTH, FLAG_MAX_HEIGHT * ratio);
-      const targetHeight = targetWidth / ratio;
-      return `<svg${newAttrs} width="${targetWidth}" height="${targetHeight}">`;
-    }
-    return `<svg${newAttrs} width="${FLAG_MAX_WIDTH}" height="${FLAG_MAX_HEIGHT}">`;
-  });
+function svgToDataUrl(svg: string): string {
+  const encoded = encodeURIComponent(svg)
+    .replace(/'/g, '%27')
+    .replace(/"/g, '%22');
+  return `data:image/svg+xml;charset=utf-8,${encoded}`;
 }
 
 const Container = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #e9edf2;
   padding: 20px;
 `;
 
@@ -84,7 +27,7 @@ const Header = styled.div`
 `;
 
 const Title = styled.h1`
-  color: white;
+  color: #1f2937;
   font-size: 2.5rem;
   margin-bottom: 1rem;
 `;
@@ -95,7 +38,8 @@ const ScoreCard = styled.div`
   border-radius: 15px;
   text-align: center;
   margin-bottom: 2rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  border: 1px solid #d5dce6;
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.12);
 `;
 
 const ScoreText = styled.h2`
@@ -112,7 +56,8 @@ const ScoreSubtext = styled.p`
 const ResultsContainer = styled.div`
   background: white;
   border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  border: 1px solid #d5dce6;
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.12);
   overflow: hidden;
   max-width: 800px;
   width: 100%;
@@ -158,22 +103,23 @@ const ResultItem = styled.div<{ isCorrect: boolean }>`
   }
 `;
 
-const FlagImage = styled.div`
+const FlagSlot = styled.div`
   width: ${FLAG_MAX_WIDTH}px;
+  height: ${FLAG_MAX_HEIGHT}px;
   margin-right: 1rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 0;
+`;
 
-  svg {
-    display: block;
-    max-width: ${FLAG_MAX_WIDTH}px;
-    max-height: ${FLAG_MAX_HEIGHT}px;
-    width: auto;
-    height: auto;
-  }
+const FlagImage = styled.img`
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  box-shadow: 0 0 0 1px #c5ccd6;
 `;
 
 const ResultInfo = styled.div`
@@ -192,7 +138,15 @@ const UserAnswer = styled.div<{ isCorrect: boolean }>`
 `;
 
 const ResultIcon = styled.div<{ isCorrect: boolean }>`
-  font-size: 1.5rem;
+  color: ${({ isCorrect }) => (isCorrect ? '#155724' : '#721c24')};
+  background: ${({ isCorrect }) => (isCorrect ? '#d4edda' : '#f8d7da')};
+  border: 1px solid ${({ isCorrect }) => (isCorrect ? '#c3e6cb' : '#f5c6cb')};
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
   margin-left: 1rem;
 `;
 
@@ -215,18 +169,19 @@ const Button = styled.button<{ variant?: 'primary' | 'secondary' }>`
   ${({ variant = 'primary' }) =>
     variant === 'primary'
       ? `
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #1f4b99;
         color: white;
         &:hover {
+          background: #183d80;
           transform: translateY(-2px);
         }
       `
       : `
-        background: rgba(255, 255, 255, 0.9);
+        background: #ffffff;
         color: #333;
-        border: 2px solid white;
+        border: 2px solid #d5dce6;
         &:hover {
-          background: white;
+          background: #f4f6f9;
         }
       `}
 
@@ -243,27 +198,31 @@ const EmptyState = styled.div`
   color: #666;
 `;
 
-const ResultFlag: React.FC<{ flagSvg: string; idKey: string | number }> = ({ flagSvg, idKey }) => {
-  const normalized = useMemo(
-    () => normalizeFlagSvg(flagSvg, `r${idKey}-`),
-    [flagSvg, idKey]
+const ResultFlag: React.FC<{ flagSvg: string; idKey: string | number }> = ({ flagSvg }) => {
+  const url = useMemo(() => (flagSvg ? svgToDataUrl(flagSvg) : ''), [flagSvg]);
+  return (
+    <FlagSlot>
+      {url && <FlagImage src={url} alt="Флаг страны" />}
+    </FlagSlot>
   );
-  return <FlagImage dangerouslySetInnerHTML={{ __html: normalized }} />;
 };
 
 const GameResults: React.FC = () => {
   const [results, setResults] = useState<QuestionWithAnswer[]>([]);
+  const [hasStoredResults, setHasStoredResults] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const storedResults = localStorage.getItem('game_results');
-    if (storedResults) {
+    if (storedResults !== null) {
+      setHasStoredResults(true);
       try {
         const parsedResults = JSON.parse(storedResults);
-        setResults(parsedResults);
+        setResults(Array.isArray(parsedResults) ? parsedResults : []);
       } catch (error) {
         console.error('Error parsing game results:', error);
+        setResults([]);
       }
     }
     setLoading(false);
@@ -291,7 +250,7 @@ const GameResults: React.FC = () => {
     );
   }
 
-  if (results.length === 0) {
+  if (!hasStoredResults) {
     return (
       <Container>
         <EmptyState>
@@ -308,7 +267,7 @@ const GameResults: React.FC = () => {
   return (
     <Container>
       <Header>
-        <Title>🏆 Результаты игры</Title>
+        <Title>Результаты игры</Title>
       </Header>
 
       <ScoreCard>
@@ -316,13 +275,15 @@ const GameResults: React.FC = () => {
           {correctAnswers} из {totalQuestions} ({scorePercentage}%)
         </ScoreText>
         <ScoreSubtext>
-          {scorePercentage >= 80 && 'Отличный результат! 🎉'}
-          {scorePercentage >= 60 && scorePercentage < 80 && 'Хороший результат! 👍'}
-          {scorePercentage >= 40 && scorePercentage < 60 && 'Неплохо, но можно лучше! 💪'}
-          {scorePercentage < 40 && 'Не расстраивайтесь, попробуйте еще раз! 🔄'}
+          {totalQuestions === 0 && 'Вы не ответили ни на один вопрос.'}
+          {totalQuestions > 0 && scorePercentage >= 80 && 'Отличный результат!'}
+          {totalQuestions > 0 && scorePercentage >= 60 && scorePercentage < 80 && 'Хороший результат!'}
+          {totalQuestions > 0 && scorePercentage >= 40 && scorePercentage < 60 && 'Неплохо, но можно лучше.'}
+          {totalQuestions > 0 && scorePercentage < 40 && 'Попробуйте еще раз.'}
         </ScoreSubtext>
       </ScoreCard>
 
+      {results.length > 0 && (
       <ResultsContainer>
         <ResultsHeader>
           <ResultsTitle>Подробные результаты</ResultsTitle>
@@ -339,12 +300,13 @@ const GameResults: React.FC = () => {
                 </UserAnswer>
               </ResultInfo>
               <ResultIcon isCorrect={result.is_correct}>
-                {result.is_correct ? '✅' : '❌'}
+                {result.is_correct ? 'Верно' : 'Ошибка'}
               </ResultIcon>
             </ResultItem>
           ))}
         </ResultsList>
       </ResultsContainer>
+      )}
 
       <ButtonGroup>
         <Button onClick={handleNewGame}>
