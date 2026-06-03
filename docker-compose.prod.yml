@@ -77,7 +77,7 @@ services:
       - traefik
     labels:
       - traefik.enable=true
-      - traefik.docker.network=traefik
+      - traefik.docker.network=traefik_default
       - traefik.http.routers.guess-the-flag.rule=Host(`yacheboksarov.ru`) && PathPrefix(`/game`)
       - traefik.http.routers.guess-the-flag.priority=100
       - traefik.http.routers.guess-the-flag.entrypoints=websecure
@@ -93,4 +93,4 @@ networks:
     driver: bridge
   traefik:
     external: true
-    name: traefik
+    name: traefik_default
