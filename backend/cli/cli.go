@@ -27,11 +27,6 @@ func getDBFromConfig(yamlConfigPath string) (*sqlx.DB, error) {
 	if yamlConfigPath == "" {
 		yamlConfigPath = "../config.yml"
 	}
-	cfg, err := config.LoadConfi
-func getDBFromConfig(yamlConfigPath string) (*sqlx.DB, error) {
-	if yamlConfigPath == "" {
-		yamlConfigPath = "../config"
-	}
 	cfg, err := config.LoadConfigFromFile(yamlConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load data from config: %s", yamlConfigPath)
@@ -44,11 +39,11 @@ func getDBFromConfig(yamlConfigPath string) (*sqlx.DB, error) {
 	err = database.Get(&existing, "SELECT COUNT(*) FROM countries")
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute select query for countries table")
+	}
+	return database, nil
 }
 
 func main() {
-	var cmd *cli.Command
-	// Database subcommands
 	databaseCommands := []*cli.Command{
 		{
 			Name:  "fill",
@@ -79,14 +74,19 @@ func main() {
 				if err != nil {
 					return fmt.Errorf("clear db tables error: %w", err)
 				}
+				return nil
+			},
+		},
+	}
+
 	databaseCmd := &cli.Command{
 		Name:     "database",
 		Usage:    "Interaction with DB: clear db, fill db and etc.",
 		Aliases:  []string{"db"},
 		Flags:    []cli.Flag{configFlag()},
-				Usage:   "path to config file",
-				Value:   "./config.yml",
-				Aliases: []string{"c"},
+		Commands: databaseCommands,
+	}
+
 	composeEnvCmd := &cli.Command{
 		Name:  "compose-env",
 		Usage: "print docker compose variables from config.yml (for --env-file)",
@@ -108,11 +108,6 @@ func main() {
 	}
 
 	if err := root.Run(context.Background(), os.Args); err != nil {
-		},
-		Commands: databaseCommands,
-
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
-
 }
