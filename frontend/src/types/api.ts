@@ -16,6 +16,7 @@ export interface TokenResponse {
 export interface StartGameResponse {
   game_id: string;
   variant: GameVariant;
+  max_flags: number;
 }
 
 export type GameVariant = 'text_input' | 'multiple_choice';
@@ -35,6 +36,9 @@ export interface QuestionResponse {
   question_id: string;
   variant: GameVariant;
   options?: AnswerOption[];
+  step: number;
+  max_flags: number;
+  steps_completed: number;
 }
 
 export interface AnswerRequest {
@@ -47,6 +51,10 @@ export interface AnswerRequest {
 
 export interface AnswerResponse {
   is_correct: boolean;
+  step: number;
+  max_flags: number;
+  steps_completed: number;
+  game_completed: boolean;
 }
 
 export interface EndGameRequest {

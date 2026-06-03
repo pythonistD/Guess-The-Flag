@@ -2,6 +2,7 @@ addr: 0.0.0.0:8080
 secret: secret_key
 token_lifetime: 24h
 logging_level: info
+max_flags_per_game: 30
 database:
   host: postgres
   port: 5432

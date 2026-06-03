@@ -22,8 +22,9 @@ const (
 )
 
 type StartGameResult struct {
-	GameId  uuid.UUID
-	Variant GameVariant
+	GameId          uuid.UUID
+	Variant         GameVariant
+	MaxFlagsPerGame int
 }
 
 type Service struct {
@@ -32,22 +33,32 @@ type Service struct {
 	answersRepo   *repo.AnswersRepo
 	countriesRepo *repo.CountriesRepo
 
-	gameStorage  storage.GameStorage
-	countryStore storage.CountryStorage
+	gameStorage     storage.GameStorage
+	countryStore    storage.CountryStorage
+	maxFlagsPerGame int
 }
 
-func NewService(db *sqlx.DB, gameStore storage.GameStorage, countryStore storage.CountryStorage) *Service {
+func NewService(
+	db *sqlx.DB,
+	gameStore storage.GameStorage,
+	countryStore storage.CountryStorage,
+	maxFlagsPerGame int,
+) *Service {
+	if maxFlagsPerGame <= 0 {
+		maxFlagsPerGame = 30
+	}
 	gamesRepo := repo.NewGamesRepo(db)
 	questionsRepo := repo.NewQuestionsRepo(db)
 	answersRepo := repo.NewAnswersRepo(db)
 	countriesRepo := repo.NewCountriesRepo(db)
 	return &Service{
-		gamesRepo:     gamesRepo,
-		questionsRepo: questionsRepo,
-		answersRepo:   answersRepo,
-		countriesRepo: countriesRepo,
-		gameStorage:   gameStore,
-		countryStore:  countryStore,
+		gamesRepo:       gamesRepo,
+		questionsRepo:   questionsRepo,
+		answersRepo:     answersRepo,
+		countriesRepo:   countriesRepo,
+		gameStorage:     gameStore,
+		countryStore:    countryStore,
+		maxFlagsPerGame: maxFlagsPerGame,
 	}
 }
 
@@ -70,7 +81,7 @@ func (s *Service) StartGame(ctx context.Context, langCode string) (*StartGameRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to start game: %w", err)
 	}
-	questions, err := s.generateQuestions(storage.QuestionsBuffSize, gameId)
+	questions, err := s.generateQuestions(gameId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start game: %w", err)
 	}
@@ -78,7 +89,11 @@ func (s *Service) StartGame(ctx context.Context, langCode string) (*StartGameRes
 	if err != nil {
 		return nil, fmt.Errorf("failed to start game: %w", err)
 	}
-	return &StartGameResult{GameId: gameId, Variant: variant}, nil
+	return &StartGameResult{
+		GameId:          gameId,
+		Variant:         variant,
+		MaxFlagsPerGame: s.maxFlagsPerGame,
+	}, nil
 }
 
 // EndGame deletes questions from gameState, returns game`s answers
@@ -104,15 +119,26 @@ func (s *Service) EndGame(ctx context.Context, gameId uuid.UUID) ([]models.Quest
 }
 
 func (s *Service) GetQuestion(ctx context.Context, gameId uuid.UUID) (any, error) {
+	served, err := s.gameStorage.GetQuestionsServed(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get question: %w", err)
+	}
+	if served >= s.maxFlagsPerGame {
+		return nil, fmt.Errorf("game flag limit reached: %w", storage.GameLimitReached)
+	}
+
 	question, err := s.gameStorage.GetQuestion(gameId)
 	if err != nil {
 		if errors.Is(err, storage.GameIdError) {
 			return nil, fmt.Errorf("game is already ended, please start new game: %w", err)
 		}
 		if errors.Is(err, storage.EmptyBuffer) || errors.Is(err, storage.GettingQuestionsError) {
-			questionsGenerated, genErr := s.generateQuestions(storage.QuestionsBuffSize, gameId)
+			questionsGenerated, genErr := s.generateQuestions(gameId)
 			if genErr != nil {
 				return nil, fmt.Errorf("failed to get question from gameStateStorage: %w", genErr)
+			}
+			if len(questionsGenerated) == 0 {
+				return nil, fmt.Errorf("game flag limit reached: %w", storage.GameLimitReached)
 			}
 			if setErr := s.gameStorage.SetQuestions(gameId, questionsGenerated); setErr != nil {
 				return nil, fmt.Errorf("failed to save questions: %w", setErr)
@@ -130,6 +156,11 @@ func (s *Service) GetQuestion(ctx context.Context, gameId uuid.UUID) (any, error
 		return nil, fmt.Errorf("failed to get question: question is nil")
 	}
 
+	step, err := s.gameStorage.IncrementQuestionsServed(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update question progress: %w", err)
+	}
+
 	questionDB, err := s.saveQuestionToDB(ctx, question)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save question to DB: %w", err)
@@ -141,10 +172,13 @@ func (s *Service) GetQuestion(ctx context.Context, gameId uuid.UUID) (any, error
 	}
 
 	base := schema.QuestionResp{
-		QuestionText: question.QuestionText,
-		FlagSVG:      question.FlagSVG,
-		QuestionID:   questionDB.QuestionId,
-		Variant:      variant,
+		QuestionText:    question.QuestionText,
+		FlagSVG:         question.FlagSVG,
+		QuestionID:      questionDB.QuestionId,
+		Variant:         variant,
+		Step:            step,
+		MaxFlags:        s.maxFlagsPerGame,
+		StepsCompleted:  step - 1,
 	}
 
 	if GameVariant(variant) == GameVariantMultipleChoice {
@@ -200,7 +234,19 @@ func (s *Service) AnswerTheQuestion(
 	if err != nil {
 		return nil, fmt.Errorf("failed to answer the question: %w", err)
 	}
-	return &schema.AnswerResp{IsCorrect: isCorrect}, nil
+
+	served, err := s.gameStorage.GetQuestionsServed(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get game progress: %w", err)
+	}
+
+	return &schema.AnswerResp{
+		IsCorrect:      isCorrect,
+		Step:           served,
+		MaxFlags:       s.maxFlagsPerGame,
+		StepsCompleted: served,
+		GameCompleted:  served >= s.maxFlagsPerGame,
+	}, nil
 }
 
 func (s *Service) getQuestionAnswer(ctx context.Context, questionId uuid.UUID) (int, error) {
@@ -265,7 +311,20 @@ func (s *Service) SaveAnswer(ctx context.Context, questionId uuid.UUID, answerTe
 	return nil
 }
 
-func (s *Service) generateQuestions(questionsGenerateNum int, gameId uuid.UUID) ([]storage.QuestionInStorage, error) {
+func (s *Service) generateQuestions(gameId uuid.UUID) ([]storage.QuestionInStorage, error) {
+	usedCountries, err := s.gameStorage.GetUsedCountries(gameId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate questions: %w", err)
+	}
+	remaining := s.maxFlagsPerGame - len(usedCountries)
+	if remaining <= 0 {
+		return nil, nil
+	}
+	questionsGenerateNum := storage.QuestionsBuffSize
+	if remaining < questionsGenerateNum {
+		questionsGenerateNum = remaining
+	}
+
 	questions := make([]storage.QuestionInStorage, questionsGenerateNum)
 	for i := 0; i < questionsGenerateNum; i++ {
 		country, err := s.extractNewCountry(gameId)

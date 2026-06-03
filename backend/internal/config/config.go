@@ -8,12 +8,15 @@ import (
 	"time"
 )
 
+const DefaultMaxFlagsPerGame = 30
+
 type AppConfig struct {
-	Addr          string        `yaml:"addr"`
-	Secret        string        `yaml:"secret"`
-	TokenLifetime time.Duration `yaml:"token_lifetime"`
-	DBConfig      DBConfig      `yaml:"database"`
-	Level         string        `yaml:"logging_level"`
+	Addr             string        `yaml:"addr"`
+	Secret           string        `yaml:"secret"`
+	TokenLifetime    time.Duration `yaml:"token_lifetime"`
+	DBConfig         DBConfig      `yaml:"database"`
+	Level            string        `yaml:"logging_level"`
+	MaxFlagsPerGame  int           `yaml:"max_flags_per_game"`
 }
 
 type DBConfig struct {
@@ -42,6 +45,9 @@ func loadFromBytes(data []byte) (AppConfig, error) {
 	var appConfig AppConfig
 	if err := yaml.Unmarshal(data, &appConfig); err != nil {
 		return AppConfig{}, fmt.Errorf("error unmarshalling config: %w", err)
+	}
+	if appConfig.MaxFlagsPerGame <= 0 {
+		appConfig.MaxFlagsPerGame = DefaultMaxFlagsPerGame
 	}
 	return appConfig, nil
 }

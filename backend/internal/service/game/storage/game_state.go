@@ -27,6 +27,9 @@ type GameStorage interface {
 	GetGameLangCode(gameID uuid.UUID) (string, error)
 	GetGameVariant(gameID uuid.UUID) (string, error)
 	GetUsedCountries(gameID uuid.UUID) (map[int]struct{}, error)
+
+	GetQuestionsServed(gameID uuid.UUID) (int, error)
+	IncrementQuestionsServed(gameID uuid.UUID) (int, error)
 }
 
 type QuestionInStorage struct {
@@ -41,10 +44,11 @@ type QuestionInStorage struct {
 
 type GameSession struct {
 	// questions - кольцевой буфер
-	questions     *RingBuffer[QuestionInStorage]
-	countriesUsed map[int]struct{}
-	LangCode      string
-	GameVariant   string
+	questions       *RingBuffer[QuestionInStorage]
+	countriesUsed   map[int]struct{}
+	LangCode        string
+	GameVariant     string
+	QuestionsServed int
 }
 
 type InMemoryGameStorage struct {
@@ -104,6 +108,7 @@ func (i *InMemoryGameStorage) SetQuestions(gameID uuid.UUID, questions []Questio
 var (
 	GameIdError           = errors.New("no questions found for game ID")
 	GettingQuestionsError = errors.New("failed to get questions")
+	GameLimitReached      = errors.New("game flag limit reached")
 )
 
 func (i *InMemoryGameStorage) GetQuestion(gameID uuid.UUID) (*QuestionInStorage, error) {
@@ -220,4 +225,26 @@ func (i *InMemoryGameStorage) GetUsedCountries(gameID uuid.UUID) (map[int]struct
 		used[id] = struct{}{}
 	}
 	return used, nil
+}
+
+func (i *InMemoryGameStorage) GetQuestionsServed(gameID uuid.UUID) (int, error) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	session, exists := i.GameSessions[gameID]
+	if !exists {
+		return 0, GameIdError
+	}
+	return session.QuestionsServed, nil
+}
+
+func (i *InMemoryGameStorage) IncrementQuestionsServed(gameID uuid.UUID) (int, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	session, exists := i.GameSessions[gameID]
+	if !exists {
+		return 0, GameIdError
+	}
+	session.QuestionsServed++
+	i.GameSessions[gameID] = session
+	return session.QuestionsServed, nil
 }

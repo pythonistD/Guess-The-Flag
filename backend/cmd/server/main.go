@@ -66,7 +66,7 @@ func main() {
 
 	// Init services
 	userService := user.NewService(database, jwtManager, passManager)
-	gameService := game.NewService(database, gameStorage, countryStorage)
+	gameService := game.NewService(database, gameStorage, countryStorage, cfg.MaxFlagsPerGame)
 
 	// Init handlers
 	userHandler := handlers.NewUserHandler(userService, logger)

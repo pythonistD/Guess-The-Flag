@@ -44,6 +44,35 @@ const QuestionCounter = styled.div`
   font-weight: bold;
 `;
 
+const ProgressContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 180px;
+`;
+
+const ProgressLabel = styled.div`
+  color: #4b5563;
+  font-size: 0.85rem;
+  font-weight: 600;
+`;
+
+const ProgressTrack = styled.div`
+  width: 100%;
+  height: 8px;
+  background: #d1d5db;
+  border-radius: 999px;
+  overflow: hidden;
+`;
+
+const ProgressFill = styled.div<{ $percent: number }>`
+  height: 100%;
+  width: ${({ $percent }) => $percent}%;
+  background: linear-gradient(90deg, #1f4b99, #3b82f6);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+`;
+
 const VariantBadge = styled.div`
   display: inline-block;
   width: fit-content;
@@ -287,7 +316,9 @@ const ErrorMessage = styled.div`
 
 const GamePlay: React.FC = () => {
   const [currentQuestion, setCurrentQuestion] = useState<QuestionResponse | null>(null);
-  const [questionNumber, setQuestionNumber] = useState(1);
+  const [stepsCompleted, setStepsCompleted] = useState(0);
+  const [maxFlags, setMaxFlags] = useState(30);
+  const [currentStep, setCurrentStep] = useState(1);
   const [answer, setAnswer] = useState('');
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [lastResult, setLastResult] = useState<AnswerResponse | null>(null);
@@ -332,12 +363,21 @@ const GamePlay: React.FC = () => {
       const response = await ApiService.getQuestion({ gameId: id });
       setCurrentQuestion(response);
       setGameVariant(response.variant);
+      setStepsCompleted(response.steps_completed);
+      setMaxFlags(response.max_flags);
+      setCurrentStep(response.step);
       localStorage.setItem('current_game_variant', response.variant);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось загрузить вопрос');
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyProgress = (step: number, max: number, completed: number) => {
+    setCurrentStep(step);
+    setMaxFlags(max);
+    setStepsCompleted(completed);
   };
 
   const handleSubmitAnswer = async () => {
@@ -363,6 +403,7 @@ const GamePlay: React.FC = () => {
             }
       );
       setLastResult(response);
+      applyProgress(response.step, response.max_flags, response.steps_completed);
       setAnswer('');
       setSelectedCountryId(null);
     } catch (err: any) {
@@ -372,9 +413,12 @@ const GamePlay: React.FC = () => {
     }
   };
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
     if (!gameId) return;
-    setQuestionNumber((n) => n + 1);
+    if (lastResult?.game_completed) {
+      await handleEndGame();
+      return;
+    }
     loadQuestion(gameId);
   };
 
@@ -385,16 +429,21 @@ const GamePlay: React.FC = () => {
     setError(null);
 
     try {
-      await ApiService.answerQuestion({
+      const response = await ApiService.answerQuestion({
         gameId,
         questionId: currentQuestion.question_id,
         skipped: true,
       });
-      setQuestionNumber((n) => n + 1);
-      const response = await ApiService.getQuestion({ gameId });
-      setCurrentQuestion(response);
-      setGameVariant(response.variant);
-      localStorage.setItem('current_game_variant', response.variant);
+      applyProgress(response.step, response.max_flags, response.steps_completed);
+      if (response.game_completed) {
+        await handleEndGame();
+        return;
+      }
+      const questionResponse = await ApiService.getQuestion({ gameId });
+      setCurrentQuestion(questionResponse);
+      setGameVariant(questionResponse.variant);
+      applyProgress(questionResponse.step, questionResponse.max_flags, questionResponse.steps_completed);
+      localStorage.setItem('current_game_variant', questionResponse.variant);
       setAnswer('');
       setSelectedCountryId(null);
       setLastResult(null);
@@ -436,6 +485,8 @@ const GamePlay: React.FC = () => {
 
   const answerContentMinHeight = isMultipleChoice ? MC_ANSWER_MIN_HEIGHT : TEXT_ANSWER_MIN_HEIGHT;
 
+  const progressPercent = maxFlags > 0 ? Math.min(100, (stepsCompleted / maxFlags) * 100) : 0;
+
   if (!gameId) {
     return <LoadingSpinner>Загрузка игры...</LoadingSpinner>;
   }
@@ -444,7 +495,15 @@ const GamePlay: React.FC = () => {
     <Container>
       <Header>
         <HeaderLeft>
-          <QuestionCounter>Вопрос {questionNumber}</QuestionCounter>
+          <ProgressContainer>
+            <ProgressLabel>
+              {stepsCompleted} / {maxFlags}
+            </ProgressLabel>
+            <ProgressTrack>
+              <ProgressFill $percent={progressPercent} />
+            </ProgressTrack>
+          </ProgressContainer>
+          <QuestionCounter>Вопрос {currentStep}</QuestionCounter>
           <VariantBadge>{variantLabel(gameVariant)}</VariantBadge>
         </HeaderLeft>
         <EndGameButton onClick={handleEndGame}>
@@ -505,7 +564,7 @@ const GamePlay: React.FC = () => {
                 {lastResult ? (
                   <>
                     <Button onClick={handleNextQuestion}>
-                      Следующий вопрос
+                      {lastResult.game_completed ? 'Завершить игру' : 'Следующий вопрос'}
                     </Button>
                     <Button variant="secondary" onClick={handleEndGame}>
                       Завершить игру

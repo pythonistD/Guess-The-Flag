@@ -45,8 +45,9 @@ func (handler *GameHandler) Start(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(
 		schema.StartGameResp{
-			GameId:  result.GameId.String(),
-			Variant: string(result.Variant),
+			GameId:   result.GameId.String(),
+			Variant:  string(result.Variant),
+			MaxFlags: result.MaxFlagsPerGame,
 		},
 	)
 	if err != nil {

@@ -7,10 +7,13 @@ type QuestionReq struct {
 }
 
 type QuestionResp struct {
-	QuestionText string    `json:"question_text"`
-	FlagSVG      string    `json:"flag_svg"`
-	QuestionID   uuid.UUID `json:"question_id"`
-	Variant      string    `json:"variant"`
+	QuestionText   string    `json:"question_text"`
+	FlagSVG        string    `json:"flag_svg"`
+	QuestionID     uuid.UUID `json:"question_id"`
+	Variant        string    `json:"variant"`
+	Step           int       `json:"step"`
+	MaxFlags       int       `json:"max_flags"`
+	StepsCompleted int       `json:"steps_completed"`
 }
 
 type AnswerOption struct {
@@ -30,12 +33,17 @@ type AnswerReq struct {
 }
 
 type AnswerResp struct {
-	IsCorrect bool `json:"is_correct"`
+	IsCorrect      bool `json:"is_correct"`
+	Step           int  `json:"step"`
+	MaxFlags       int  `json:"max_flags"`
+	StepsCompleted int  `json:"steps_completed"`
+	GameCompleted  bool `json:"game_completed"`
 }
 
 type StartGameResp struct {
-	GameId  string `json:"game_id"`
-	Variant string `json:"variant"`
+	GameId    string `json:"game_id"`
+	Variant   string `json:"variant"`
+	MaxFlags  int    `json:"max_flags"`
 }
 
 type EndGameReq struct {
