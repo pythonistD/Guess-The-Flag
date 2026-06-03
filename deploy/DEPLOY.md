@@ -60,9 +60,48 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose up -d --build
 ```
 
+## HTTP 502 от Traefik на /game
+
+502 = Traefik не достучался до `guess_the_flag_frontend:80` (не nginx внутри).
+
+**1. Сеть Traefik** — имя должно совпадать везде:
+
+```bash
+docker network ls | grep traefik
+docker inspect guess_the_flag_frontend --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+```
+
+В `docker-compose.prod.yml`: `networks.traefik.name` и label `traefik.docker.network` (сейчас `traefik_default`).
+
+**2. Обход Traefik** — отвечает ли nginx:
+
+```bash
+docker exec guess_the_flag_frontend wget -qS -O- http://127.0.0.1/game/ 2>&1 | head -15
+```
+
+Если тут `200` — чините Traefik (сеть/labels). Если ошибка — пересоберите frontend.
+
+**3. Пересоздать frontend с labels:**
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build --force-recreate frontend
+```
+
+**4. Логи Traefik:**
+
+```bash
+docker logs traefik --since 5m 2>&1 | tail -30
+```
+
 ## Только postgres, нет backend/frontend
 
-Обычно `filldb` завершился с ошибкой, и backend не стартовал (старая схема). В новых версиях загрузка стран идёт при старте backend.
+Обычно `filldb` завершился с ошибкой, и backend не стартовал (старая схема).
+
+Заполнение БД вручную (один раз после миграций):
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --entrypoint /app/cli backend database fill --config=/app/config.yml
+```
 
 ```bash
 docker compose -f docker-compose.prod.yml ps -a

@@ -22,13 +22,10 @@ WORKDIR /app
 COPY --from=builder /out/server /app/server
 COPY --from=builder /out/cli /app/cli
 COPY --from=builder /src/migrations /app/migrations
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-
-RUN chmod +x /app/docker-entrypoint.sh
 
 USER app
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/server"]
 CMD ["--config=/app/config.yml"]

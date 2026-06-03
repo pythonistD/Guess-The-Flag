@@ -77,12 +77,14 @@ services:
       - traefik
     labels:
       - traefik.enable=true
+      # Должно совпадать с networks.traefik.name (docker network inspect traefik)
       - traefik.docker.network=traefik_default
       - traefik.http.routers.guess-the-flag.rule=Host(`yacheboksarov.ru`) && PathPrefix(`/game`)
-      - traefik.http.routers.guess-the-flag.priority=100
       - traefik.http.routers.guess-the-flag.entrypoints=websecure
       - traefik.http.routers.guess-the-flag.tls=true
       - traefik.http.routers.guess-the-flag.tls.certresolver=letsencrypt
+      - traefik.http.routers.guess-the-flag.priority=100
+      - traefik.http.routers.guess-the-flag.service=guess-the-flag
       - traefik.http.services.guess-the-flag.loadbalancer.server.port=80
 
 volumes:
