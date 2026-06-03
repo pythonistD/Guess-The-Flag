@@ -1,68 +1,58 @@
 # Деплой на VPS с Traefik
 
-Единый файл настроек: **`config.yml`** в корне репозитория (backend, PostgreSQL, Traefik).
+## Одна команда
 
-## config.yml перед деплоем
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Go, `.env` и `make` не нужны.
+
+## Перед первым запуском
+
+### 1. `config.docker.yml`
+
+Настройки backend и пароль БД (должен совпадать с `POSTGRES_PASSWORD` в `docker-compose.prod.yml`, по умолчанию `postgres`):
 
 ```yaml
-addr: 0.0.0.0:8080
-secret: <длинный_секрет_jwt>
+secret: <длинный_jwt_секрет>
 database:
-  host: postgres          # имя сервиса в docker-compose
-  port: 5432
-  username: postgres
-  password: <пароль>
-  dbname: guess_the_flag
-deploy:
-  domain: flags.example.com   # DNS → VPS
-  traefik_network: traefik    # как в docker network ls
-  traefik_entrypoint: websecure
-  traefik_cert_resolver: letsencrypt
+  password: postgres
 ```
 
-Секция `deploy` backend не читает — только для генерации переменных Docker Compose.
+### 2. Домен в `docker-compose.prod.yml`
 
-## Запуск
+В сервисе `frontend` → `labels` замените:
 
-**Linux (VPS):**
-
-```bash
-docker compose -f docker-compose.prod.yml \
-  --env-file <(go run ./backend/cli compose-env --config=config.yml) \
-  up -d --build
+```yaml
+- traefik.http.routers.guess-the-flag.rule=Host(`flags.example.com`)
 ```
 
-**Через Make:**
+на ваш домен. DNS (A-запись) должен указывать на VPS.
 
-```bash
-make prod-up
-```
+### 3. Traefik
 
-На VPS без Go можно использовать образ backend:
+- Запущен Traefik в Docker
+- External network `traefik` (если у вас другое имя — измените `networks.traefik.name`)
+- Entrypoint `websecure` и cert resolver `letsencrypt` (как в вашем Traefik)
 
-```bash
-docker run --rm -v "$(pwd)/config.yml:/config.yml:ro" \
-  guess_the_flag_backend:latest compose-env --config=/config.yml > .compose.env
-docker compose -f docker-compose.prod.yml --env-file .compose.env up -d --build
-rm .compose.env
-```
+### 4. Смена пароля БД
 
-## Проверка
+Одновременно поменяйте в **трёх** местах:
 
-```bash
-go run ./backend/cli compose-env --config=config.yml
-make prod-config
-```
-
-## Локальная разработка
-
-`docker compose up` — по-прежнему `config.docker.yml` (порты 3000/8080).
-
-Локальный `go run` — `config.yml` с `database.host: localhost`.
+- `config.docker.yml` → `database.password`
+- `docker-compose.prod.yml` → `postgres.environment.POSTGRES_PASSWORD`
+- `docker-compose.prod.yml` → `migrate.environment.GOOSE_DBSTRING` (пароль в строке)
 
 ## Обновление
 
 ```bash
 git pull
-make prod-up
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+## Локально (без Traefik)
+
+```bash
+docker compose up -d --build
 ```

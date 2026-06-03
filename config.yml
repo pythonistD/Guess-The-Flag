@@ -10,13 +10,4 @@ database:
   dbname: guess_the_flag
   max_idle_connections: 2
   max_open_connections: 100
-  max_connection_lifetime: 60m
-
-# Docker / Traefik (только для prod: make prod-up или compose-env)
-# Перед деплоем: addr: 0.0.0.0:8080, database.host: postgres
-deploy:
-  domain: flags.example.com
-  traefik_network: traefik
-  traefik_entrypoint: websecure
-  traefik_cert_resolver: letsencrypt
-  traefik_router_name: guess-the-flag 
+  max_connection_lifetime: 60m 
