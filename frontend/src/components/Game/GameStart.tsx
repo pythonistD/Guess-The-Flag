@@ -136,7 +136,7 @@ const GameStart: React.FC = () => {
       localStorage.setItem('current_game_id', response.game_id);
       localStorage.setItem('current_game_variant', response.variant);
       setLastVariant(response.variant);
-      navigate('/game/play');
+      navigate('/play');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось начать игру');
     } finally {

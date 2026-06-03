@@ -20,15 +20,18 @@ database:
   password: postgres
 ```
 
-### 2. Домен в `docker-compose.prod.yml`
+### 2. Путь и домен в `docker-compose.prod.yml`
 
-В сервисе `frontend` → `labels` замените:
+Приложение открывается по **`https://yacheboksarov.ru/game`** (как `/portfolio`), без отдельного поддомена.
+
+В labels сервиса `frontend` при необходимости замените домен:
 
 ```yaml
-- traefik.http.routers.guess-the-flag.rule=Host(`flags.example.com`)
+- traefik.http.routers.guess-the-flag.rule=Host(`yacheboksarov.ru`) && PathPrefix(`/game`)
+- traefik.http.routers.guess-the-flag.priority=100
 ```
 
-на ваш домен. DNS (A-запись) должен указывать на VPS.
+`priority=100` — чтобы роутер срабатывал раньше общих правил на том же хосте.
 
 ### 3. Traefik
 
@@ -56,3 +59,21 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```bash
 docker compose up -d --build
 ```
+
+## Только postgres, нет backend/frontend
+
+Обычно `filldb` завершился с ошибкой, и backend не стартовал (старая схема). В новых версиях загрузка стран идёт при старте backend.
+
+```bash
+docker compose -f docker-compose.prod.yml ps -a
+docker logs guess_the_flag_backend
+docker compose -f docker-compose.prod.yml up -d --build backend frontend
+```
+
+## Ошибка загрузки стран при старте backend
+
+```bash
+docker logs guess_the_flag_backend
+```
+
+Частые причины: нет HTTPS до `restcountries.com` / CDN флагов, неверный `database.password` в `config.docker.yml`.

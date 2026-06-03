@@ -5,12 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"math"
 	"net/http"
+	"time"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -19,6 +19,8 @@ import (
 	"github.com/pythonistD/Guess-The-Flag/internal/db/models"
 	"github.com/pythonistD/Guess-The-Flag/internal/db/repo"
 )
+
+var httpClient = &http.Client{Timeout: 90 * time.Second}
 
 func FillCountriesInDb(db *sqlx.DB) error {
 	countries, err := getCountriesFromApi("https://restcountries.com/v3.1/independent?fields=name,translations,flags,cca2")
@@ -34,7 +36,7 @@ func FillCountriesInDb(db *sqlx.DB) error {
 }
 
 func getCountriesFromApi(url string) ([]Country, error) {
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +64,16 @@ func createCountries(db *sqlx.DB, countriesSchema []Country) error {
 	ctx := context.Background()
 
 	for _, country := range countriesSchema {
-		imgId, err := addCountryImgToDb(ctx, imagesRepo, country.Flag.SVG)
-		if err != nil && errors.Is(err, svgAlreadyExists) {
-			fmt.Printf("svg with the same hash for country: %s already exists in DB", country.Name)
+		existing, err := countryRepo.GetByCode(ctx, country.Code)
+		if err != nil {
+			return fmt.Errorf("error checking country %s: %w", country.Code, err)
+		}
+		if existing != nil {
+			fmt.Printf("country %s (%s) already in DB, skipping\n", country.Code, country.Name.Common)
 			continue
 		}
+
+		imgId, err := addCountryImgToDb(ctx, imagesRepo, country.Flag.SVG)
 		if err != nil {
 			return fmt.Errorf("error creating country %s Code: %s img: %w", country.Name, country.Code, err)
 		}
@@ -86,21 +93,16 @@ func createCountries(db *sqlx.DB, countriesSchema []Country) error {
 	return nil
 }
 
-func addCountryImgToDb(ctx context.Context, repo *repo.ImagesRepo, url string) (int, error) {
+func addCountryImgToDb(ctx context.Context, imagesRepo *repo.ImagesRepo, url string) (int, error) {
 	flagImgModel, err := createCountryImgModel(url)
 	if err != nil {
 		return 0, fmt.Errorf("error creating country img model: %w", err)
 	}
-	res, err := repo.GetByHash(ctx, flagImgModel.ImageHash)
-	if res != nil {
-		return 0, svgAlreadyExists
-	}
-
-	flagImgDb, err := repo.Create(ctx, &flagImgModel)
+	imageID, err := imagesRepo.CreateOrGet(ctx, &flagImgModel)
 	if err != nil {
 		return 0, fmt.Errorf("error adding flag img to db, img hash:%s %w", flagImgModel.ImageHash, err)
 	}
-	return flagImgDb.ImageId, nil
+	return imageID, nil
 }
 
 func createCountryNames(ctx context.Context, repo *repo.CountryNamesRepo, countryId int, translations map[string]Translation) error {
@@ -156,10 +158,6 @@ func calculateThreshold(name string) int {
 // Завести мапу и проверять, встречался ли hash уже
 // скипать, если встречался
 // проверять, что svg имеет тэги svg, и убирать height и weight
-
-var (
-	svgAlreadyExists = errors.New("svg already exists: equal hash found")
-)
 
 func createCountryImgModel(imgUrl string) (models.FlagImage, error) {
 	imgSvg, err := downloadData(imgUrl)
@@ -232,7 +230,7 @@ func stripUnits(v string) string {
 }
 
 func downloadData(imgUrl string) (string, error) {
-	response, err := http.Get(imgUrl)
+	response, err := httpClient.Get(imgUrl)
 	if err != nil {
 		return "", err
 	}

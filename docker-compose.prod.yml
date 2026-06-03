@@ -3,7 +3,7 @@
 #
 # Перед запуском:
 #   1. config.docker.yml — secret, database.password
-#   2. Host(`...`) ниже — ваш домен (должен совпадать с DNS)
+#   2. Host + PathPrefix `/game` ниже — как yacheboksarov.ru/game
 #   3. database.password = POSTGRES_PASSWORD ниже (по умолчанию postgres)
 #   4. Сеть traefik — имя external network, как у вашего Traefik
 
@@ -42,23 +42,6 @@ services:
       - app_network
     restart: "no"
 
-  filldb:
-    image: guess_the_flag_backend:latest
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: guess_the_flag_filldb
-    entrypoint: ["/app/cli"]
-    command: ["database", "fill", "--config=/app/config.yml"]
-    volumes:
-      - ./config.docker.yml:/app/config.yml:ro
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    networks:
-      - app_network
-    restart: "no"
-
   backend:
     image: guess_the_flag_backend:latest
     build:
@@ -69,7 +52,9 @@ services:
     volumes:
       - ./config.docker.yml:/app/config.yml:ro
     depends_on:
-      filldb:
+      postgres:
+        condition: service_healthy
+      migrate:
         condition: service_completed_successfully
     networks:
       - app_network
@@ -79,7 +64,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_API_BASE_URL: ""
+        REACT_APP_API_BASE_URL: "/game"
+        REACT_APP_BASE_PATH: "/game"
+        PUBLIC_URL: "/game"
+        NGINX_CONFIG: nginx.prod.conf
     container_name: guess_the_flag_frontend
     restart: unless-stopped
     depends_on:
@@ -90,7 +78,8 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik
-      - traefik.http.routers.guess-the-flag.rule=Host(`flags.example.com`)
+      - traefik.http.routers.guess-the-flag.rule=Host(`yacheboksarov.ru`) && PathPrefix(`/game`)
+      - traefik.http.routers.guess-the-flag.priority=100
       - traefik.http.routers.guess-the-flag.entrypoints=websecure
       - traefik.http.routers.guess-the-flag.tls=true
       - traefik.http.routers.guess-the-flag.tls.certresolver=letsencrypt

@@ -163,7 +163,7 @@ const AuthForm: React.FC<AuthFormProps> = () => {
       }
 
       TokenUtils.setToken(response.token);
-      navigate('/game');
+      navigate('/');
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || err.message || 'Произошла ошибка при аутентификации';
       setError(errorMessage);

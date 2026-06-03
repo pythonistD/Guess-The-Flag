@@ -234,12 +234,12 @@ const GameResults: React.FC = () => {
 
   const handleNewGame = () => {
     localStorage.removeItem('game_results');
-    navigate('/game');
+    navigate('/');
   };
 
   const handleBackToMenu = () => {
     localStorage.removeItem('game_results');
-    navigate('/game');
+    navigate('/');
   };
 
   if (loading) {

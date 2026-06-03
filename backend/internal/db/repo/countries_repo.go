@@ -2,6 +2,8 @@ package repo
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -24,6 +26,18 @@ func (c *CountriesRepo) GetALl(ctx context.Context) ([]models.Country, error) {
 		return nil, fmt.Errorf("error getting all countries: %w", err)
 	}
 	return countries, nil
+}
+
+func (c *CountriesRepo) GetByCode(ctx context.Context, code string) (*models.Country, error) {
+	var country models.Country
+	err := c.db.GetContext(ctx, &country, queries.CountryQueries.GetByCode, code)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("error getting country by code: %w", err)
+	}
+	return &country, nil
 }
 
 func (c *CountriesRepo) GetById(ctx context.Context, id int) (*models.Country, error) {

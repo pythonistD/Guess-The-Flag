@@ -4,7 +4,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 ARG REACT_APP_API_BASE_URL=http://localhost:8080
+ARG REACT_APP_BASE_PATH=
+ARG PUBLIC_URL=
+ARG NGINX_CONFIG=nginx.conf
+
 ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+ENV REACT_APP_BASE_PATH=$REACT_APP_BASE_PATH
+ENV PUBLIC_URL=$PUBLIC_URL
 
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -15,8 +21,10 @@ RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
 
+ARG NGINX_CONFIG=nginx.conf
+
 COPY --from=builder /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY ${NGINX_CONFIG} /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 

@@ -8,6 +8,7 @@ import GameResults from './components/Game/GameResults';
 import FlagsDebug from './components/Debug/FlagsDebug';
 import ProtectedRoute from './components/ProtectedRoute';
 import { TokenUtils } from './services/api';
+import { BASE_PATH, paths } from './paths';
 
 const GlobalStyle = createGlobalStyle`
   * {
@@ -49,69 +50,54 @@ function App() {
   return (
     <>
       <GlobalStyle />
-      <Router>
+      <Router basename={BASE_PATH || undefined}>
         <Routes>
-          {/* Публичные маршруты */}
-          <Route 
-            path="/login" 
+          <Route
+            path={paths.login}
             element={
               isAuthenticated ? (
-                <Navigate to="/game" replace />
+                <Navigate to={paths.home} replace />
               ) : (
                 <AuthForm />
               )
-            } 
+            }
           />
 
-          {/* Открытый отладочный маршрут: рендерит все флаги в FlagContainer */}
-          <Route path="/debug/flags" element={<FlagsDebug />} />
-          
-          {/* Защищенные маршруты */}
+          <Route path={paths.debugFlags} element={<FlagsDebug />} />
+
           <Route
-            path="/game"
+            path={paths.home}
             element={
               <ProtectedRoute>
                 <GameStart />
               </ProtectedRoute>
             }
           />
-          
+
           <Route
-            path="/game/play"
+            path={paths.play}
             element={
               <ProtectedRoute>
                 <GamePlay />
               </ProtectedRoute>
             }
           />
-          
+
           <Route
-            path="/game/results"
+            path={paths.results}
             element={
               <ProtectedRoute>
                 <GameResults />
               </ProtectedRoute>
             }
           />
-          
-          {/* Перенаправления */}
-          <Route
-            path="/"
-            element={
-              <Navigate 
-                to={isAuthenticated ? "/game" : "/login"} 
-                replace 
-              />
-            }
-          />
-          
-          {/* 404 - страница не найдена */}
+
           <Route
             path="*"
             element={
-              <Navigate 
-                to={isAuthenticated ? "/game" : "/login"} 
-                replace 
+              <Navigate
+                to={isAuthenticated ? paths.home : paths.login}
+                replace
               />
             }
           />

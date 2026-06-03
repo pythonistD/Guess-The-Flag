@@ -12,8 +12,18 @@ import {
   EndGameResponse,
   FlagDebugItem,
 } from '../types/api';
+import { BASE_PATH, withBasePath } from '../paths';
 
-// Empty string is valid (same-origin via nginx proxy in Docker/Traefik).
+/** Путь для axios: с префиксом /game — без дублирования /game/game/... */
+function apiUrl(path: string): string {
+  let p = path.startsWith('/') ? path : `/${path}`;
+  if (BASE_PATH && p.startsWith('/game/')) {
+    p = p.slice('/game'.length);
+  }
+  return p;
+}
+
+// Empty string = same origin; "/game" = API under path prefix (prod behind Traefik).
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL !== undefined
     ? process.env.REACT_APP_API_BASE_URL
@@ -44,7 +54,7 @@ api.interceptors.response.use(
     console.error(`API Error: ${error.response?.status}`, error.response?.data || error.message);
     if (error.response?.status === 401) {
       localStorage.removeItem('jwt_token');
-      window.location.href = '/login';
+      window.location.href = withBasePath('/login');
     }
     return Promise.reject(error);
   }
@@ -52,25 +62,25 @@ api.interceptors.response.use(
 
 export class ApiService {
   static async register(data: RegisterRequest): Promise<TokenResponse> {
-    const response: AxiosResponse<TokenResponse> = await api.post('/auth/register', data);
+    const response: AxiosResponse<TokenResponse> = await api.post(apiUrl('/auth/register'), data);
     return response.data;
   }
 
   static async login(data: LoginRequest): Promise<TokenResponse> {
-    const response: AxiosResponse<TokenResponse> = await api.post('/auth/login', data);
+    const response: AxiosResponse<TokenResponse> = await api.post(apiUrl('/auth/login'), data);
     return response.data;
   }
 
   static async startGame(langCode: string = 'rus'): Promise<StartGameResponse> {
     const response: AxiosResponse<StartGameResponse> = await api.post(
-      `/game/start?lang_code=${encodeURIComponent(langCode)}`
+      `${apiUrl('/game/start')}?lang_code=${encodeURIComponent(langCode)}`
     );
     return response.data;
   }
 
   static async getQuestion(data: QuestionRequest): Promise<QuestionResponse> {
     const response: AxiosResponse<QuestionResponse> = await api.post(
-      `/game/${data.gameId}/questions/next`
+      apiUrl(`/game/${data.gameId}/questions/next`)
     );
     return response.data;
   }
@@ -88,19 +98,21 @@ export class ApiService {
     }
 
     const response: AxiosResponse<AnswerResponse> = await api.post(
-      `/game/${data.gameId}/questions/${data.questionId}/answer`,
+      apiUrl(`/game/${data.gameId}/questions/${data.questionId}/answer`),
       body
     );
     return response.data;
   }
 
   static async endGame(data: EndGameRequest): Promise<EndGameResponse> {
-    const response: AxiosResponse<EndGameResponse> = await api.post(`/game/${data.gameId}/end`);
+    const response: AxiosResponse<EndGameResponse> = await api.post(
+      apiUrl(`/game/${data.gameId}/end`)
+    );
     return response.data;
   }
 
   static async getAllFlags(): Promise<FlagDebugItem[]> {
-    const response: AxiosResponse<FlagDebugItem[]> = await api.get('/debug/flags');
+    const response: AxiosResponse<FlagDebugItem[]> = await api.get(apiUrl('/debug/flags'));
     return response.data;
   }
 }

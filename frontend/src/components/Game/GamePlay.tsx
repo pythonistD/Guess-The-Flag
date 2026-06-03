@@ -310,7 +310,7 @@ const GamePlay: React.FC = () => {
     didInitRef.current = true;
     const storedGameId = localStorage.getItem('current_game_id');
     if (!storedGameId) {
-      navigate('/game');
+      navigate('/');
       return;
     }
     const storedVariant = localStorage.getItem('current_game_variant') as GameVariant | null;
@@ -413,7 +413,7 @@ const GamePlay: React.FC = () => {
       localStorage.setItem('game_results', JSON.stringify(Array.isArray(results) ? results : []));
       localStorage.removeItem('current_game_id');
       localStorage.removeItem('current_game_variant');
-      navigate('/game/results');
+      navigate('/results');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Не удалось завершить игру');
     }

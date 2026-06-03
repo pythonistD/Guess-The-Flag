@@ -3,6 +3,7 @@ package queries
 var CountryQueries = struct {
 	GetAll           string
 	GetByID          string
+	GetByCode        string
 	Create           string
 	GetAllWithImage  string
 	GetByIdWithImage string
@@ -15,6 +16,11 @@ var CountryQueries = struct {
 		SELECT country_id, code, flag_image_id
 		FROM countries
 		WHERE country_id = $1
+	`,
+	GetByCode: `
+		SELECT country_id, code, flag_image_id
+		FROM countries
+		WHERE code = $1
 	`,
 	Create: `
 		INSERT INTO countries (code, flag_image_id)
