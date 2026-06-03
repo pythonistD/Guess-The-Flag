@@ -12,7 +12,7 @@ import (
 const QuestionsBuffSize = 5
 
 type GameStorage interface {
-	InitStorageState(gameId uuid.UUID, langCode string)
+	InitStorageState(gameId uuid.UUID, langCode string, variant string)
 	SetQuestions(gameID uuid.UUID, questions []QuestionInStorage) error
 	GetQuestion(gameID uuid.UUID) (*QuestionInStorage, error)
 	GetQuestionsRemaining(gameID uuid.UUID) (int, error)
@@ -25,6 +25,8 @@ type GameStorage interface {
 	DeleteGameSession(gameID uuid.UUID) error
 
 	GetGameLangCode(gameID uuid.UUID) (string, error)
+	GetGameVariant(gameID uuid.UUID) (string, error)
+	GetUsedCountries(gameID uuid.UUID) (map[int]struct{}, error)
 }
 
 type QuestionInStorage struct {
@@ -42,6 +44,7 @@ type GameSession struct {
 	questions     *RingBuffer[QuestionInStorage]
 	countriesUsed map[int]struct{}
 	LangCode      string
+	GameVariant   string
 }
 
 type InMemoryGameStorage struct {
@@ -56,7 +59,7 @@ func NewInMemoryGameStorage() *InMemoryGameStorage {
 	}
 }
 
-func (i *InMemoryGameStorage) InitStorageState(gameId uuid.UUID, langCode string) {
+func (i *InMemoryGameStorage) InitStorageState(gameId uuid.UUID, langCode string, variant string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -64,6 +67,7 @@ func (i *InMemoryGameStorage) InitStorageState(gameId uuid.UUID, langCode string
 		questions:     NewRingBuffer[QuestionInStorage](QuestionsBuffSize + 1),
 		countriesUsed: make(map[int]struct{}, NumberOfCountries),
 		LangCode:      langCode,
+		GameVariant:   variant,
 	}
 }
 
@@ -192,4 +196,28 @@ func (i *InMemoryGameStorage) GetGameLangCode(gameID uuid.UUID) (string, error) 
 		return "", GameIdError
 	}
 	return session.LangCode, nil
+}
+
+func (i *InMemoryGameStorage) GetGameVariant(gameID uuid.UUID) (string, error) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	session, exists := i.GameSessions[gameID]
+	if !exists {
+		return "", GameIdError
+	}
+	return session.GameVariant, nil
+}
+
+func (i *InMemoryGameStorage) GetUsedCountries(gameID uuid.UUID) (map[int]struct{}, error) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	session, exists := i.GameSessions[gameID]
+	if !exists {
+		return nil, GameIdError
+	}
+	used := make(map[int]struct{}, len(session.countriesUsed))
+	for id := range session.countriesUsed {
+		used[id] = struct{}{}
+	}
+	return used, nil
 }

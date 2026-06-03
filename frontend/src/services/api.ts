@@ -13,7 +13,11 @@ import {
   FlagDebugItem,
 } from '../types/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+// Empty string is valid (same-origin via nginx proxy in Docker/Traefik).
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL !== undefined
+    ? process.env.REACT_APP_API_BASE_URL
+    : 'http://localhost:8080';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -72,9 +76,20 @@ export class ApiService {
   }
 
   static async answerQuestion(data: AnswerRequest): Promise<AnswerResponse> {
+    const body: Record<string, unknown> = {};
+    if (data.skipped) {
+      body.skipped = true;
+    } else if (data.selected_country !== undefined) {
+      body.selected_country = data.selected_country;
+      body.skipped = false;
+    } else if (data.answer !== undefined) {
+      body.answer = data.answer;
+      body.skipped = false;
+    }
+
     const response: AxiosResponse<AnswerResponse> = await api.post(
       `/game/${data.gameId}/questions/${data.questionId}/answer`,
-      { answer: data.answer }
+      body
     );
     return response.data;
   }

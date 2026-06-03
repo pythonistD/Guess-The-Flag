@@ -40,8 +40,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: guess_the_flag_filldb
-    entrypoint: ["/app/filldb"]
-    command: ["--config=/app/config.yml"]
+    entrypoint: ["/app/cli"]
+    command: ["database", "fill", "--config=/app/config.yml"]
     volumes:
       - ./config.docker.yml:/app/config.yml:ro
     depends_on:

@@ -15,22 +15,34 @@ export interface TokenResponse {
 
 export interface StartGameResponse {
   game_id: string;
+  variant: GameVariant;
 }
+
+export type GameVariant = 'text_input' | 'multiple_choice';
 
 export interface QuestionRequest {
   gameId: string;
+}
+
+export interface AnswerOption {
+  country_id: number;
+  name: string;
 }
 
 export interface QuestionResponse {
   question_text: string;
   flag_svg: string;
   question_id: string;
+  variant: GameVariant;
+  options?: AnswerOption[];
 }
 
 export interface AnswerRequest {
   gameId: string;
   questionId: string;
-  answer: string;
+  answer?: string;
+  selected_country?: number;
+  skipped?: boolean;
 }
 
 export interface AnswerResponse {

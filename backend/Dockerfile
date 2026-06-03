@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server ./cmd/server \
-    && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/filldb ./internal/db/filldb
+    && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/cli ./cli
 
 FROM alpine:3.20 AS runtime
 
@@ -20,7 +20,7 @@ RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 app
 WORKDIR /app
 
 COPY --from=builder /out/server /app/server
-COPY --from=builder /out/filldb /app/filldb
+COPY --from=builder /out/cli /app/cli
 COPY --from=builder /src/migrations /app/migrations
 
 USER app
